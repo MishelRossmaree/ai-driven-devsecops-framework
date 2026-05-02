@@ -24,8 +24,7 @@ jobs:
 
       - name: Run static analysis (Cppcheck)
         run: |
-          cppcheck --enable=all --inconclusive vulnerable_code/ 2> reports/cppcheck-report.txt || true
-
+          cppcheck --enable=all --inconclusive codes/ 2> reports/cppcheck-report.txt || true
       - name: Show Cppcheck report
         run: |
           echo "===== Cppcheck Report ====="
