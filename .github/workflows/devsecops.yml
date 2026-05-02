@@ -22,17 +22,17 @@ jobs:
       - name: Create reports folder
         run: mkdir -p reports
 
-      - name: Run static analysis (Cppcheck)
+      - name: Run static analysis (Cppcheck XML)
         run: |
-          cppcheck --enable=all --inconclusive codes/ 2> reports/cppcheck-report.txt || true
+          cppcheck --enable=all --inconclusive --xml codes/ 2> reports/cppcheck-report.xml || true
 
-      - name: Show Cppcheck report
+      - name: Show Cppcheck XML report
         run: |
-          echo "===== Cppcheck Report ====="
-          cat reports/cppcheck-report.txt || true
+          echo "===== Cppcheck XML Report ====="
+          cat reports/cppcheck-report.xml || true
 
-      - name: Upload Cppcheck report
+      - name: Upload Cppcheck XML report
         uses: actions/upload-artifact@v4
         with:
-          name: cppcheck-report
-          path: reports/cppcheck-report.txt
+          name: cppcheck-xml-report
+          path: reports/cppcheck-report.xml
