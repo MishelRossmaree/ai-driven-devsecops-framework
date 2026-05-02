@@ -1,0 +1,38 @@
+name: "AI-Driven DevSecOps Framework"
+description: "Reusable DevSecOps action for C/C++ static analysis"
+
+inputs:
+  scan-path:
+    description: "Path to scan in the target repository"
+    required: false
+    default: "."
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Cppcheck
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck
+
+    - name: Create reports folder
+      shell: bash
+      run: mkdir -p reports
+
+    - name: Run Cppcheck static analysis
+      shell: bash
+      run: |
+        cppcheck --enable=all --inconclusive --xml "${{ inputs.scan-path }}" 2> reports/cppcheck-report.xml || true
+
+    - name: Show Cppcheck XML report
+      shell: bash
+      run: |
+        echo "===== Cppcheck XML Report ====="
+        cat reports/cppcheck-report.xml || true
+
+    - name: Upload Cppcheck XML report
+      uses: actions/upload-artifact@v4
+      with:
+        name: cppcheck-xml-report
+        path: reports/cppcheck-report.xml
