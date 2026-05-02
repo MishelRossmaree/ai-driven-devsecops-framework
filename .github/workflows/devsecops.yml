@@ -14,7 +14,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Confirm project structure
+      - name: Install Cppcheck
         run: |
-          echo "Checking project folders..."
-          ls -R
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
+
+      - name: Create reports folder
+        run: mkdir -p reports
+
+      - name: Run static analysis (Cppcheck)
+        run: |
+          cppcheck --enable=all --inconclusive vulnerable_code/ 2> reports/cppcheck-report.txt || true
+
+      - name: Show Cppcheck report
+        run: |
+          echo "===== Cppcheck Report ====="
+          cat reports/cppcheck-report.txt || true
