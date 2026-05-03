@@ -30,7 +30,16 @@ runs:
     - name: Run Clang Static Analyzer
       shell: bash
       run: |
-        scan-build -o reports/clang-report clang -fsyntax-only $(find "${{ inputs.scan-path }}" -name "*.c" -o -name "*.cpp" -o -name "*.cc" -o -name "*.cxx") || true
+        FILES=$(find "${{ inputs.scan-path }}" \( -name "*.c" -o -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" \))
+
+        echo "Files found for Clang analysis:"
+        echo "$FILES"
+
+        if [ -z "$FILES" ]; then
+          echo "No C/C++ files found for Clang analysis."
+        else
+          scan-build --status-bugs -o reports/clang-report clang -fsyntax-only $FILES || true
+        fi
 
     - name: Show Cppcheck XML report
       shell: bash
@@ -52,6 +61,8 @@ runs:
 
     - name: Upload Clang Static Analyzer report
       uses: actions/upload-artifact@v4
+      if: always()
       with:
         name: clang-static-analyzer-report
         path: reports/clang-report
+        if-no-files-found: ignore
