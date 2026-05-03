@@ -36,9 +36,9 @@ runs:
         echo "$FILES"
 
         if [ -z "$FILES" ]; then
-          echo "No C/C++ files found for Clang analysis."
+          echo "No C/C++ files found for Clang analysis." | tee reports/clang-output.txt
         else
-          scan-build --status-bugs -o reports/clang-report clang -fsyntax-only $FILES || true
+          scan-build --status-bugs -o reports/clang-report clang -std=gnu89 -fsyntax-only $FILES > reports/clang-output.txt 2>&1 || true
         fi
 
     - name: Show Cppcheck XML report
@@ -59,7 +59,15 @@ runs:
         name: cppcheck-xml-report
         path: reports/cppcheck-report.xml
 
-    - name: Upload Clang Static Analyzer report
+    - name: Upload Clang analyzer console output
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: clang-console-output
+        path: reports/clang-output.txt
+        if-no-files-found: ignore
+
+    - name: Upload Clang Static Analyzer report folder
       uses: actions/upload-artifact@v4
       if: always()
       with:
