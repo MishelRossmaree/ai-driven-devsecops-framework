@@ -10,20 +10,27 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install Cppcheck
+    - name: Install SAST tools
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install -y cppcheck
+        sudo apt-get install -y cppcheck clang clang-tools
 
     - name: Create reports folder
       shell: bash
-      run: mkdir -p reports
+      run: |
+        mkdir -p reports
+        mkdir -p reports/clang-report
 
     - name: Run Cppcheck static analysis
       shell: bash
       run: |
         cppcheck --enable=all --inconclusive --xml "${{ inputs.scan-path }}" 2> reports/cppcheck-report.xml || true
+
+    - name: Run Clang Static Analyzer
+      shell: bash
+      run: |
+        scan-build -o reports/clang-report clang -fsyntax-only $(find "${{ inputs.scan-path }}" -name "*.c" -o -name "*.cpp" -o -name "*.cc" -o -name "*.cxx") || true
 
     - name: Show Cppcheck XML report
       shell: bash
@@ -31,8 +38,20 @@ runs:
         echo "===== Cppcheck XML Report ====="
         cat reports/cppcheck-report.xml || true
 
+    - name: List Clang report files
+      shell: bash
+      run: |
+        echo "===== Clang Static Analyzer Report Files ====="
+        find reports/clang-report -type f || true
+
     - name: Upload Cppcheck XML report
       uses: actions/upload-artifact@v4
       with:
         name: cppcheck-xml-report
         path: reports/cppcheck-report.xml
+
+    - name: Upload Clang Static Analyzer report
+      uses: actions/upload-artifact@v4
+      with:
+        name: clang-static-analyzer-report
+        path: reports/clang-report
