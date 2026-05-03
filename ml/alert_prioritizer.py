@@ -5,6 +5,26 @@ import xml.etree.ElementTree as ET
 CPPCHECK_REPORT = "reports/cppcheck-report.xml"
 OUTPUT_FILE = "reports/prioritised-alerts.csv"
 
+IGNORED_ALERT_IDS = {
+    "checkersReport"
+}
+
+IGNORED_SEVERITIES = {
+    # Keep empty for now.
+    # Later, if you want to remove information-only alerts:
+    # "information"
+}
+
+
+def is_real_alert(alert_id, severity):
+    if alert_id in IGNORED_ALERT_IDS:
+        return False
+
+    if severity in IGNORED_SEVERITIES:
+        return False
+
+    return True
+
 
 def priority_from_alert(severity, cwe, alert_id, message):
     score = 0
@@ -27,9 +47,13 @@ def priority_from_alert(severity, cwe, alert_id, message):
         "overflow",
         "gets",
         "strcpy",
+        "strcat",
+        "sprintf",
         "memcpy",
         "memory",
         "dereference",
+        "use after free",
+        "double free",
     ]
 
     if any(keyword in text for keyword in high_risk_keywords):
@@ -58,6 +82,9 @@ def parse_cppcheck_report():
         severity = error.get("severity", "")
         message = error.get("msg", "")
         cwe = error.get("cwe", "")
+
+        if not is_real_alert(alert_id, severity):
+            continue
 
         location = error.find("location")
         file_name = location.get("file", "") if location is not None else ""
@@ -110,9 +137,13 @@ if __name__ == "__main__":
     write_prioritised_alerts(alerts)
 
     print("===== Prioritised Alerts =====")
-    for alert in alerts:
-        print(
-            f"{alert['priority']} | {alert['tool']} | "
-            f"{alert['file']}:{alert['line']} | "
-            f"{alert['alert_id']} | CWE-{alert['cwe']}"
-        )
+    if not alerts:
+        print("No real alerts found.")
+    else:
+        for alert in alerts:
+            cwe_text = f"CWE-{alert['cwe']}" if alert["cwe"] else "No CWE"
+            print(
+                f"{alert['priority']} | {alert['tool']} | "
+                f"{alert['file']}:{alert['line']} | "
+                f"{alert['alert_id']} | {cwe_text}"
+            )
