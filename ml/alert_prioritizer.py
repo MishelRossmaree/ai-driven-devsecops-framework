@@ -5,7 +5,10 @@ import pandas as pd
 import joblib
 
 CPPCHECK_REPORT = "reports/cppcheck-report.xml"
-MODEL_PATH = "models/alert_priority_model.pkl"
+
+ACTION_PATH = os.environ.get("GITHUB_ACTION_PATH", ".")
+MODEL_PATH = os.path.join(ACTION_PATH, "models", "alert_priority_model.pkl")
+
 OUTPUT_FILE = "reports/prioritised-alerts.csv"
 
 LABEL_MAP = {
