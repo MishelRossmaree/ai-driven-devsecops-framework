@@ -7,9 +7,9 @@ import joblib
 CPPCHECK_REPORT = "reports/cppcheck-report.xml"
 
 ACTION_PATH = os.environ.get("GITHUB_ACTION_PATH", ".")
-MODEL_PATH = os.path.join(ACTION_PATH, "models", "alert_priority_model.pkl")
+MODEL_PATH = os.path.join(ACTION_PATH, "models", "alert_prioritizer", "cppcheck", "alert_priority_model.pkl")
 
-OUTPUT_FILE = "reports/prioritised-alerts.csv"
+OUTPUT_FILE = "reports/alert_prioritizer/cppcheck/prioritised-alerts.csv"
 
 LABEL_MAP = {
     0: "LOW",

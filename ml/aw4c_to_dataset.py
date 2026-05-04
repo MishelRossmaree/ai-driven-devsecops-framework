@@ -1,9 +1,9 @@
 import os
 import pandas as pd
 
-ACTIONABLE_FILE = "data/raw/compressed_ActionableWarning.json.gz"
-NON_ACTIONABLE_FILE = "data/raw/compressed_NonActionableWarning.json.gz"
-OUTPUT_FILE = "data/processed/aw4c_alert_dataset.csv"
+ACTIONABLE_FILE = "data/raw/alert_prioritizer/cppcheck/compressed_ActionableWarning.json.gz"
+NON_ACTIONABLE_FILE = "data/raw/alert_prioritizer/cppcheck/compressed_NonActionableWarning.json.gz"
+OUTPUT_FILE = "data/processed/alert_prioritizer/cppcheck/aw4c_alert_dataset.csv"
 
 
 def load_aw4c_json(path):

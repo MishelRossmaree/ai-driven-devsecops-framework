@@ -13,9 +13,9 @@ from sklearn.svm import LinearSVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neural_network import MLPClassifier
 
-DATA_FILE = "data/processed/aw4c_alert_dataset.csv"
-MODEL_OUTPUT = "models/alert_priority_model.pkl"
-RESULTS_OUTPUT = "reports/model_comparison.csv"
+DATA_FILE = "data/processed/alert_prioritizer/cppcheck/aw4c_alert_dataset.csv"
+MODEL_OUTPUT = "models/alert_prioritizer/cppcheck/alert_priority_model.pkl"
+RESULTS_OUTPUT = "reports/alert_prioritizer/cppcheck/model_comparison.csv"
 
 
 def load_data():
