@@ -91,5 +91,5 @@ runs:
       if: always()
       with:
         name: prioritised-alerts
-        path: reports/prioritised-alerts.csv
+        path: reports/alert_prioritizer/cppcheck/prioritised-alerts.csv
         if-no-files-found: ignore

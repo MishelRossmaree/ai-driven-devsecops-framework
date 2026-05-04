@@ -161,7 +161,7 @@ def predict_priorities(df):
 
 
 def write_prioritised_alerts(df):
-    os.makedirs("reports", exist_ok=True)
+    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
 
     if df.empty:
         with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as csvfile:
