@@ -14,7 +14,13 @@ runs:
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install -y cppcheck clang clang-tools
+        sudo apt-get install -y cppcheck clang clang-tools python3-pip
+
+    - name: Install Python ML dependencies
+      shell: bash
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install pandas scikit-learn joblib
 
     - name: Create reports folder
       shell: bash
