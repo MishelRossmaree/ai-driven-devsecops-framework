@@ -1,6 +1,7 @@
 import csv
 import os
 import re
+import html
 import pandas as pd
 
 CLANG_REPORT_DIR = "reports/clang-report"
@@ -27,6 +28,62 @@ def extract_html_reports():
     return html_files
 
 
+def clean_text(value):
+    if not value:
+        return ""
+
+    value = html.unescape(value)
+    value = re.sub(r"<[^>]+>", "", value)
+    value = re.sub(r"\s+", " ", value)
+
+    return value.strip()
+
+
+def extract_with_patterns(content, patterns):
+    for pattern in patterns:
+        match = re.search(
+            pattern,
+            content,
+            re.IGNORECASE | re.DOTALL
+        )
+
+        if match:
+            return clean_text(match.group(1))
+
+    return ""
+
+
+def determine_priority(message):
+    lower_message = message.lower()
+
+    high_keywords = [
+        "null",
+        "dereference",
+        "use after free",
+        "double free",
+        "overflow",
+        "buffer",
+        "uninitialized",
+        "dead store"
+    ]
+
+    medium_keywords = [
+        "memory",
+        "leak",
+        "warning",
+        "value stored",
+        "never read"
+    ]
+
+    if any(keyword in lower_message for keyword in high_keywords):
+        return "HIGH"
+
+    if any(keyword in lower_message for keyword in medium_keywords):
+        return "MEDIUM"
+
+    return "LOW"
+
+
 def parse_clang_reports():
     alerts = []
 
@@ -36,46 +93,48 @@ def parse_clang_reports():
 
     for report_file in html_reports:
         try:
-            with open(report_file, "r", encoding="utf-8") as f:
+            with open(report_file, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
 
-            title_match = re.search(
-                r"<title>(.*?)</title>",
+            message = extract_with_patterns(
                 content,
-                re.IGNORECASE | re.DOTALL
+                [
+                    r"<!--\s*BUGDESC\s*(.*?)\s*-->",
+                    r"<h3[^>]*>(.*?)</h3>",
+                    r"<title>(.*?)</title>"
+                ]
             )
 
-            message = (
-                title_match.group(1).strip()
-                if title_match
-                else "Unknown Clang issue"
+            file_name = extract_with_patterns(
+                content,
+                [
+                    r"<!--\s*BUGFILE\s*(.*?)\s*-->",
+                    r"File:\s*</td>\s*<td[^>]*>(.*?)</td>",
+                    r"File:\s*(.*?)<"
+                ]
             )
 
-            lower_message = message.lower()
+            line_number = extract_with_patterns(
+                content,
+                [
+                    r"<!--\s*BUGLINE\s*(\d+)\s*-->",
+                    r"Line:\s*</td>\s*<td[^>]*>(\d+)</td>",
+                    r"Line:\s*(\d+)"
+                ]
+            )
 
-            priority = "LOW"
+            if not message:
+                message = "Unknown Clang issue"
 
-            if any(keyword in lower_message for keyword in [
-                "null",
-                "dereference",
-                "use after free",
-                "double free",
-                "overflow",
-                "buffer"
-            ]):
-                priority = "HIGH"
+            if not file_name:
+                file_name = report_file
 
-            elif any(keyword in lower_message for keyword in [
-                "memory",
-                "leak",
-                "warning"
-            ]):
-                priority = "MEDIUM"
+            priority = determine_priority(message)
 
             alerts.append({
                 "tool": "clang",
-                "file": report_file,
-                "line": "",
+                "file": file_name,
+                "line": line_number,
                 "alert_id": "clang-static-analyzer",
                 "cwe": "",
                 "severity": "warning",
@@ -115,7 +174,6 @@ def write_prioritised_alerts(df):
             encoding="utf-8"
         ) as csvfile:
             writer = csv.writer(csvfile)
-
             writer.writerow(output_columns)
 
         print("No Clang alerts found.")
@@ -157,9 +215,16 @@ def main():
         return
 
     for _, alert in df.iterrows():
+        location = (
+            f"{alert['file']}:{alert['line']}"
+            if alert["line"]
+            else alert["file"]
+        )
+
         print(
             f"{alert['priority']} | "
             f"{alert['tool']} | "
+            f"{location} | "
             f"{alert['message']}"
         )
 
