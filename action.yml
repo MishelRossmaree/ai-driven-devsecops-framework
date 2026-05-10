@@ -82,6 +82,11 @@ runs:
       run: |
         python3 "$GITHUB_ACTION_PATH/ml/alert_prioritizer/cppcheck/cppcheck_prioritizer.py"
 
+    - name: Run Clang alert prioritisation
+      shell: bash
+      run: |
+        python3 "$GITHUB_ACTION_PATH/ml/alert_prioritizer/clang/clang_prioritizer.py"
+
     - name: Upload Cppcheck XML report
       uses: actions/upload-artifact@v4
       with:
@@ -104,10 +109,18 @@ runs:
         path: reports/clang-report
         if-no-files-found: ignore
 
-    - name: Upload ML prioritised alerts
+    - name: Upload Cppcheck prioritised alerts
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: cppcheck-prioritised-alerts
         path: reports/alert_prioritizer/cppcheck/prioritised-alerts.csv
+        if-no-files-found: ignore
+
+    - name: Upload Clang prioritised alerts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: clang-prioritised-alerts
+        path: reports/alert_prioritizer/clang/prioritised-alerts.csv
         if-no-files-found: ignore
