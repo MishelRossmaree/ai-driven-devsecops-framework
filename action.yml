@@ -9,6 +9,7 @@ inputs:
 
 runs:
   using: "composite"
+
   steps:
     - name: Install SAST tools
       shell: bash
@@ -22,29 +23,46 @@ runs:
         python3 -m pip install --upgrade pip
         python3 -m pip install pandas scikit-learn joblib
 
-    - name: Create reports folder
+    - name: Create report folders
       shell: bash
       run: |
         mkdir -p reports
         mkdir -p reports/clang-report
+        mkdir -p reports/alert_prioritizer/cppcheck
+        mkdir -p reports/alert_prioritizer/clang
+        mkdir -p reports/final_decision
 
     - name: Run Cppcheck static analysis
       shell: bash
       run: |
-        cppcheck --enable=all --inconclusive --xml "${{ inputs.scan-path }}" 2> reports/cppcheck-report.xml || true
+        cppcheck \
+          --enable=all \
+          --inconclusive \
+          --xml \
+          "${{ inputs.scan-path }}" \
+          2> reports/cppcheck-report.xml || true
 
     - name: Run Clang Static Analyzer
       shell: bash
       run: |
-        FILES=$(find "${{ inputs.scan-path }}" \( -name "*.c" -o -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" \))
+        FILES=$(find "${{ inputs.scan-path }}" \
+          \( -name "*.c" -o -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" \))
 
         echo "Files found for Clang analysis:"
         echo "$FILES"
 
         if [ -z "$FILES" ]; then
-          echo "No C/C++ files found for Clang analysis." | tee reports/clang-output.txt
+          echo "No C/C++ files found for Clang analysis." \
+            | tee reports/clang-output.txt
         else
-          scan-build --status-bugs -o reports/clang-report clang -std=gnu89 -fsyntax-only $FILES > reports/clang-output.txt 2>&1 || true
+          scan-build \
+            --status-bugs \
+            -o reports/clang-report \
+            clang \
+            -std=gnu89 \
+            -fsyntax-only \
+            $FILES \
+            > reports/clang-output.txt 2>&1 || true
         fi
 
     - name: Show Cppcheck XML report
@@ -59,10 +77,10 @@ runs:
         echo "===== Clang Static Analyzer Report Files ====="
         find reports/clang-report -type f || true
 
-    - name: Run alert prioritisation (ML 2 baseline)
+    - name: Run Cppcheck ML alert prioritisation
       shell: bash
       run: |
-        python3 "$GITHUB_ACTION_PATH/ml/alert_prioritizer.py"
+        python3 "$GITHUB_ACTION_PATH/ml/alert_prioritizer/cppcheck/cppcheck_prioritizer.py"
 
     - name: Upload Cppcheck XML report
       uses: actions/upload-artifact@v4
@@ -86,10 +104,10 @@ runs:
         path: reports/clang-report
         if-no-files-found: ignore
 
-    - name: Upload prioritised alerts report
+    - name: Upload ML prioritised alerts
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: prioritised-alerts
+        name: cppcheck-prioritised-alerts
         path: reports/alert_prioritizer/cppcheck/prioritised-alerts.csv
         if-no-files-found: ignore
