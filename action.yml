@@ -87,6 +87,11 @@ runs:
       run: |
         python3 "$GITHUB_ACTION_PATH/ml/alert_prioritizer/clang/clang_prioritizer.py"
 
+    - name: Run final security decision engine
+      shell: bash
+      run: |
+        python3 "$GITHUB_ACTION_PATH/ml/alert_prioritizer/final_decision/alert_decision_engine.py"
+
     - name: Upload Cppcheck XML report
       uses: actions/upload-artifact@v4
       with:
@@ -123,4 +128,12 @@ runs:
       with:
         name: clang-prioritised-alerts
         path: reports/alert_prioritizer/clang/prioritised-alerts.csv
+        if-no-files-found: ignore
+
+    - name: Upload final security decision
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: final-security-decision
+        path: reports/final_decision/security_decision.csv
         if-no-files-found: ignore
