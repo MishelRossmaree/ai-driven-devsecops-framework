@@ -156,6 +156,16 @@ def main():
 
     write_decision(result)
 
+    if result["decision"] == "BLOCK":
+        print("\nPipeline blocked due to HIGH severity alerts.")
+        raise SystemExit(1)
+
+    if result["decision"] == "REVIEW":
+        print("\nPipeline requires manual security review.")
+        return
+
+    print("\nPipeline passed security decision.")
+
 
 if __name__ == "__main__":
     main()
