@@ -42,7 +42,7 @@ runs:
           "${{ inputs.scan-path }}" \
           2> reports/cppcheck-report.xml || true
 
-        - name: Run Clang Static Analyzer
+    - name: Run Clang Static Analyzer
       shell: bash
       run: |
         C_FILES=$(find "${{ inputs.scan-path }}" \( -name "*.c" \))
