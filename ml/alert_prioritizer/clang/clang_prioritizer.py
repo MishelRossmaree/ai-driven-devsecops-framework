@@ -3,6 +3,7 @@ import os
 import re
 import html
 import pandas as pd
+import joblib
 
 CLANG_REPORT_DIR = "reports/clang-report"
 
@@ -10,10 +11,21 @@ OUTPUT_FILE = (
     "reports/alert_prioritizer/clang/prioritised-alerts.csv"
 )
 
+ACTION_PATH = os.environ.get("GITHUB_ACTION_PATH", ".")
+MODEL_PATH = os.path.join(
+    ACTION_PATH, "models", "alert_prioritizer", "clang", "clang_priority_model.pkl"
+)
+
 LABEL_MAP = {
-    "HIGH": 2,
+    0: "LOW",
+    1: "MEDIUM",
+    2: "HIGH"
+}
+
+PRIORITY_MAP = {
+    "LOW": 0,
     "MEDIUM": 1,
-    "LOW": 0
+    "HIGH": 2
 }
 
 
@@ -53,38 +65,66 @@ def extract_with_patterns(content, patterns):
     return ""
 
 
-def determine_priority(message):
-    lower_message = message.lower()
-
-    high_keywords = [
-        "null",
-        "dereference",
-        "use after free",
-        "double free",
-        "overflow",
-        "buffer",
-        "uninitialized",
-        "dead store"
-    ]
-
-    medium_keywords = [
-        "memory",
-        "leak",
-        "warning",
-        "value stored",
-        "never read"
-    ]
-
-    if any(keyword in lower_message for keyword in high_keywords):
-        return "HIGH"
-
-    if any(keyword in lower_message for keyword in medium_keywords):
-        return "MEDIUM"
-
-    return "LOW"
+def severity_to_score(severity):
+    severity = str(severity).lower()
+    mapping = {
+        "critical": 4,
+        "error": 3,
+        "warning": 2,
+        "note": 1,
+        "information": 1,
+    }
+    return mapping.get(severity, 0)
 
 
-def parse_clang_reports():
+def has_value(value):
+    if value is None:
+        return 0
+    value = str(value).strip()
+    if value == "" or value.lower() in ["nan", "none", "null"]:
+        return 0
+    return 1
+
+
+def keyword_feature(text, keywords):
+    text = str(text).lower()
+    return int(any(keyword in text for keyword in keywords))
+
+
+def build_features(message, alert_id, severity, cwe):
+    return {
+        "severity_score": severity_to_score(severity),
+        "has_cwe": has_value(cwe),
+        "is_null_pointer": keyword_feature(
+            message, ["null pointer", "nullpointer", "null"]
+        ),
+        "is_buffer_issue": keyword_feature(
+            message, ["buffer", "overflow", "overrun", "out of bounds"]
+        ),
+        "is_memory_issue": keyword_feature(
+            message, ["memory", "memleak", "leak", "free", "dereference"]
+        ),
+        "is_obsolete_function": keyword_feature(
+            message, ["gets", "strcpy", "strcat", "sprintf"]
+        ),
+        "is_clang": 1,
+        "alert_id": str(alert_id),
+        "severity": str(severity),
+        "cwe": str(cwe),
+        "message": str(message),
+    }
+
+
+def load_model():
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(
+            f"Trained model not found at {MODEL_PATH}. "
+            "Run train_clang_model.py first."
+        )
+    return joblib.load(MODEL_PATH)
+
+
+def parse_clang_reports(model):
     alerts = []
 
     html_reports = extract_html_reports()
@@ -129,7 +169,16 @@ def parse_clang_reports():
             if not file_name:
                 file_name = report_file
 
-            priority = determine_priority(message)
+            features = build_features(
+                message=message,
+                alert_id="clang-static-analyzer",
+                severity="warning",
+                cwe=""
+            )
+
+            df_features = pd.DataFrame([features])
+            label = model.predict(df_features)[0]
+            priority = LABEL_MAP[label]
 
             alerts.append({
                 "tool": "clang",
@@ -140,7 +189,7 @@ def parse_clang_reports():
                 "severity": "warning",
                 "message": message,
                 "priority": priority,
-                "label": LABEL_MAP[priority]
+                "label": label
             })
 
         except Exception as e:
@@ -204,7 +253,9 @@ def write_prioritised_alerts(df):
 
 
 def main():
-    df = parse_clang_reports()
+    model = load_model()
+
+    df = parse_clang_reports(model)
 
     write_prioritised_alerts(df)
 
