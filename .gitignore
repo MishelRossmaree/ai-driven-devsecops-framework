@@ -1,3 +1,14 @@
+# Training datasets
 data/raw/
 data/processed/
-reports/alert_prioritizer/
+
+# Generated feature matrices
+data/features/commit_risk/X_*.pkl
+data/features/commit_risk/y_*.pkl
+
+# Reports
+reports/
+
+# Python cache
+__pycache__/
+*.pyc

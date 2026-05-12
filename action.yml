@@ -27,6 +27,7 @@ runs:
       shell: bash
       run: |
         mkdir -p reports
+        mkdir -p reports/commit_risk
         mkdir -p reports/clang-report
         mkdir -p reports/alert_prioritizer/cppcheck
         mkdir -p reports/alert_prioritizer/clang
@@ -96,6 +97,15 @@ runs:
         echo "===== Clang Static Analyzer Report Files ====="
         find reports/clang-report -type f || true
 
+    - name: Run ML commit risk prediction
+      shell: bash
+      run: |
+        python3 "$GITHUB_ACTION_PATH/ml/commit_risk/commit_risk_predictor.py" \
+          --scan-path "${{ inputs.scan-path }}" \
+          --model-path "$GITHUB_ACTION_PATH/models/commit_risk/commit_risk_model.pkl" \
+          --vectorizer-path "$GITHUB_ACTION_PATH/data/features/commit_risk/tfidf_vectorizer.pkl" \
+          --output "reports/commit_risk/commit_risk_report.csv"
+
     - name: Run Cppcheck ML alert prioritisation
       shell: bash
       run: |
@@ -113,9 +123,11 @@ runs:
 
     - name: Upload Cppcheck XML report
       uses: actions/upload-artifact@v4
+      if: always()
       with:
         name: cppcheck-xml-report
         path: reports/cppcheck-report.xml
+        if-no-files-found: ignore
 
     - name: Upload Clang analyzer console output
       uses: actions/upload-artifact@v4
@@ -131,6 +143,14 @@ runs:
       with:
         name: clang-static-analyzer-report
         path: reports/clang-report
+        if-no-files-found: ignore
+
+    - name: Upload commit risk report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: commit-risk-report
+        path: reports/commit_risk/commit_risk_report.csv
         if-no-files-found: ignore
 
     - name: Upload Cppcheck prioritised alerts
