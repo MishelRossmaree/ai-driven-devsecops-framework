@@ -119,7 +119,7 @@ runs:
     - name: Run final security decision engine
       shell: bash
       run: |
-        python3 "$GITHUB_ACTION_PATH/ml/alert_prioritizer/alert_decision_engine.py"
+        python3 "$GITHUB_ACTION_PATH/ml/decision_engine/security_decision_engine.py"
 
     - name: Upload Cppcheck XML report
       uses: actions/upload-artifact@v4
