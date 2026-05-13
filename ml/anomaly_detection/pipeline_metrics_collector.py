@@ -1,0 +1,134 @@
+import os
+import time
+import pandas as pd
+from pathlib import Path
+
+
+COMMIT_RISK_REPORT = (
+    "reports/commit_risk/commit_risk_report.csv"
+)
+
+CPPCHECK_REPORT = (
+    "reports/alert_prioritizer/cppcheck/prioritised-alerts.csv"
+)
+
+CLANG_REPORT = (
+    "reports/alert_prioritizer/clang/prioritised-alerts.csv"
+)
+
+DECISION_REPORT = (
+    "reports/final_decision/security_decision.csv"
+)
+
+OUTPUT_DIR = Path("reports/anomaly_detection")
+OUTPUT_FILE = OUTPUT_DIR / "pipeline_metrics.csv"
+
+
+def safe_read_csv(path):
+    if not os.path.exists(path):
+        return pd.DataFrame()
+
+    try:
+        return pd.read_csv(path)
+    except Exception:
+        return pd.DataFrame()
+
+
+def count_priority(df, priority):
+    if df.empty or "priority" not in df.columns:
+        return 0
+
+    return df["priority"].eq(priority).sum()
+
+
+def count_risk(df, level):
+    if df.empty or "risk_level" not in df.columns:
+        return 0
+
+    return df["risk_level"].eq(level).sum()
+
+
+def main():
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    commit_df = safe_read_csv(COMMIT_RISK_REPORT)
+    cppcheck_df = safe_read_csv(CPPCHECK_REPORT)
+    clang_df = safe_read_csv(CLANG_REPORT)
+    decision_df = safe_read_csv(DECISION_REPORT)
+
+    combined_alerts = pd.concat(
+        [cppcheck_df, clang_df],
+        ignore_index=True
+    )
+
+    high_alerts = count_priority(combined_alerts, "HIGH")
+    medium_alerts = count_priority(combined_alerts, "MEDIUM")
+    low_alerts = count_priority(combined_alerts, "LOW")
+
+    total_alerts = (
+        high_alerts +
+        medium_alerts +
+        low_alerts
+    )
+
+    high_commit_risk = count_risk(commit_df, "HIGH")
+    medium_commit_risk = count_risk(commit_df, "MEDIUM")
+    low_commit_risk = count_risk(commit_df, "LOW")
+
+    total_files_scanned = len(commit_df)
+
+    if total_files_scanned > 0:
+        alerts_per_file = round(
+            total_alerts / total_files_scanned,
+            2
+        )
+    else:
+        alerts_per_file = 0
+
+    decision = "UNKNOWN"
+
+    if not decision_df.empty:
+        decision = decision_df.iloc[0]["decision"]
+
+    run_data = {
+        "timestamp": int(time.time()),
+
+        "total_files_scanned": total_files_scanned,
+
+        "total_alerts": total_alerts,
+
+        "high_alerts": high_alerts,
+        "medium_alerts": medium_alerts,
+        "low_alerts": low_alerts,
+
+        "high_commit_risk": high_commit_risk,
+        "medium_commit_risk": medium_commit_risk,
+        "low_commit_risk": low_commit_risk,
+
+        "alerts_per_file": alerts_per_file,
+
+        "decision": decision
+    }
+
+    new_row = pd.DataFrame([run_data])
+
+    if OUTPUT_FILE.exists():
+        existing_df = pd.read_csv(OUTPUT_FILE)
+        updated_df = pd.concat(
+            [existing_df, new_row],
+            ignore_index=True
+        )
+    else:
+        updated_df = new_row
+
+    updated_df.to_csv(
+        OUTPUT_FILE,
+        index=False
+    )
+
+    print("\nPipeline metrics collected successfully")
+    print(updated_df.tail())
+
+
+if __name__ == "__main__":
+    main()

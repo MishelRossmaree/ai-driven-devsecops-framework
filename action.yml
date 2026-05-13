@@ -121,6 +121,11 @@ runs:
       run: |
         python3 "$GITHUB_ACTION_PATH/ml/decision_engine/security_decision_engine.py"
 
+    - name: Collect pipeline metrics for anomaly detection
+      shell: bash
+      run: |
+        python3 "$GITHUB_ACTION_PATH/ml/anomaly_detection/pipeline_metrics_collector.py"
+
     - name: Upload Cppcheck XML report
       uses: actions/upload-artifact@v4
       if: always()
