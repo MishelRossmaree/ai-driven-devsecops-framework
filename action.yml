@@ -31,6 +31,7 @@ runs:
         mkdir -p reports/clang-report
         mkdir -p reports/alert_prioritizer/cppcheck
         mkdir -p reports/alert_prioritizer/clang
+        mkdir -p reports/anomaly_detection
         mkdir -p reports/final_decision
 
     - name: Run Cppcheck static analysis
@@ -97,7 +98,7 @@ runs:
         echo "===== Clang Static Analyzer Report Files ====="
         find reports/clang-report -type f || true
 
-    - name: Run ML commit risk prediction
+    - name: Run ML1 commit risk prediction
       shell: bash
       run: |
         python3 "$GITHUB_ACTION_PATH/ml/commit_risk/commit_risk_predictor.py" \
@@ -106,25 +107,25 @@ runs:
           --vectorizer-path "$GITHUB_ACTION_PATH/data/features/commit_risk/tfidf_vectorizer.pkl" \
           --output "reports/commit_risk/commit_risk_report.csv"
 
-    - name: Run Cppcheck ML alert prioritisation
+    - name: Run ML2 Cppcheck alert prioritisation
       shell: bash
       run: |
         python3 "$GITHUB_ACTION_PATH/ml/alert_prioritizer/cppcheck/cppcheck_prioritizer.py"
 
-    - name: Run Clang alert prioritisation
+    - name: Run ML2 Clang alert prioritisation
       shell: bash
       run: |
         python3 "$GITHUB_ACTION_PATH/ml/alert_prioritizer/clang/clang_prioritizer.py"
+
+    - name: Collect ML3 pipeline metrics
+      shell: bash
+      run: |
+        python3 "$GITHUB_ACTION_PATH/ml/anomaly_detection/pipeline_metrics_collector.py"
 
     - name: Run final security decision engine
       shell: bash
       run: |
         python3 "$GITHUB_ACTION_PATH/ml/decision_engine/security_decision_engine.py"
-
-    - name: Collect pipeline metrics for anomaly detection
-      shell: bash
-      run: |
-        python3 "$GITHUB_ACTION_PATH/ml/anomaly_detection/pipeline_metrics_collector.py"
 
     - name: Upload Cppcheck XML report
       uses: actions/upload-artifact@v4
