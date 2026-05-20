@@ -20,8 +20,11 @@ DECISION_REPORT = (
     "reports/final_decision/security_decision.csv"
 )
 
-OUTPUT_DIR = Path("reports/anomaly_detection")
-OUTPUT_FILE = OUTPUT_DIR / "pipeline_metrics.csv"
+HISTORY_OUTPUT_DIR = Path(".devsecops/anomaly_detection")
+HISTORY_OUTPUT_FILE = HISTORY_OUTPUT_DIR / "pipeline_metrics.csv"
+
+REPORT_OUTPUT_DIR = Path("reports/anomaly_detection")
+REPORT_OUTPUT_FILE = REPORT_OUTPUT_DIR / "pipeline_metrics.csv"
 
 
 def safe_read_csv(path):
@@ -49,7 +52,8 @@ def count_risk(df, level):
 
 
 def main():
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    HISTORY_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    REPORT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     commit_df = safe_read_csv(COMMIT_RISK_REPORT)
     cppcheck_df = safe_read_csv(CPPCHECK_REPORT)
@@ -112,8 +116,8 @@ def main():
 
     new_row = pd.DataFrame([run_data])
 
-    if OUTPUT_FILE.exists():
-        existing_df = pd.read_csv(OUTPUT_FILE)
+    if HISTORY_OUTPUT_FILE.exists():
+        existing_df = pd.read_csv(HISTORY_OUTPUT_FILE)
         updated_df = pd.concat(
             [existing_df, new_row],
             ignore_index=True
@@ -122,11 +126,18 @@ def main():
         updated_df = new_row
 
     updated_df.to_csv(
-        OUTPUT_FILE,
+        HISTORY_OUTPUT_FILE,
+        index=False
+    )
+
+    updated_df.to_csv(
+        REPORT_OUTPUT_FILE,
         index=False
     )
 
     print("\nPipeline metrics collected successfully")
+    print(f"History saved to: {HISTORY_OUTPUT_FILE}")
+    print(f"Report copy saved to: {REPORT_OUTPUT_FILE}")
     print(updated_df.tail())
 
 
