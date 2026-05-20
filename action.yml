@@ -33,6 +33,7 @@ runs:
         mkdir -p reports/alert_prioritizer/clang
         mkdir -p reports/anomaly_detection
         mkdir -p reports/final_decision
+        mkdir -p .devsecops/anomaly_detection
 
     - name: Run Cppcheck static analysis
       shell: bash
@@ -55,6 +56,7 @@ runs:
           -path "*/reports" -prune -o \
           -path "*/.git" -prune -o \
           -name "*.c" -print)
+
         CPP_FILES=$(find "${{ inputs.scan-path }}" \
           -path "*/.devsecops" -prune -o \
           -path "*/reports" -prune -o \
@@ -133,23 +135,33 @@ runs:
       run: |
         python3 "$GITHUB_ACTION_PATH/ml/anomaly_detection/pipeline_metrics_collector.py"
 
-    - name: Persist ML3 metrics in target repository
+    - name: Train ML3 anomaly detection models
       shell: bash
       run: |
-        if [ -f ".devsecops/anomaly_detection/pipeline_metrics.csv" ]; then
+        python3 "$GITHUB_ACTION_PATH/ml/anomaly_detection/train_anomaly_model.py"
+
+    - name: Run ML3 anomaly detection
+      shell: bash
+      run: |
+        python3 "$GITHUB_ACTION_PATH/ml/anomaly_detection/anomaly_detector.py"
+
+    - name: Persist ML3 state in target repository
+      shell: bash
+      run: |
+        if [ -d ".devsecops/anomaly_detection" ]; then
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add .devsecops/anomaly_detection/pipeline_metrics.csv
+          git add .devsecops/anomaly_detection/
 
           if git diff --cached --quiet; then
-            echo "No ML3 metrics changes to commit."
+            echo "No ML3 state changes to commit."
           else
-            git commit -m "Update ML3 pipeline metrics [skip ci]"
+            git commit -m "Update ML3 anomaly detection state [skip ci]"
             git push
           fi
         else
-          echo "No ML3 metrics file found."
+          echo "No ML3 state directory found."
         fi
 
     - name: Run final security decision engine
@@ -211,6 +223,22 @@ runs:
       with:
         name: anomaly-detection-metrics
         path: reports/anomaly_detection/pipeline_metrics.csv
+        if-no-files-found: ignore
+
+    - name: Upload ML3 anomaly report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: ml3-anomaly-report
+        path: reports/anomaly_detection/anomaly_report.csv
+        if-no-files-found: ignore
+
+    - name: Upload ML3 model comparison
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: ml3-model-comparison
+        path: reports/anomaly_detection/anomaly_model_comparison.csv
         if-no-files-found: ignore
 
     - name: Upload final security decision

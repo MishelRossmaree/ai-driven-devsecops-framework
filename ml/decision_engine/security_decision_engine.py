@@ -14,6 +14,10 @@ CLANG_REPORT = (
     "reports/alert_prioritizer/clang/prioritised-alerts.csv"
 )
 
+ANOMALY_REPORT = (
+    "reports/anomaly_detection/anomaly_report.csv"
+)
+
 OUTPUT_FILE = (
     "reports/final_decision/security_decision.csv"
 )
@@ -38,7 +42,6 @@ def build_alert_summary(df, priority, max_items=5):
         return ""
 
     selected = df[df["priority"] == priority].head(max_items)
-
     summaries = []
 
     for _, row in selected.iterrows():
@@ -53,11 +56,7 @@ def build_alert_summary(df, priority, max_items=5):
         if pd.notna(line) and str(line).strip() != "":
             location = f"{file}:{line}"
 
-        summary = (
-            f"{tool} | {alert_id} | {location} | {message}"
-        )
-
-        summaries.append(summary)
+        summaries.append(f"{tool} | {alert_id} | {location} | {message}")
 
     return " ; ".join(summaries)
 
@@ -67,23 +66,40 @@ def build_commit_risk_summary(df, risk_level, max_items=5):
         return ""
 
     selected = df[df["risk_level"] == risk_level].head(max_items)
-
     summaries = []
 
     for _, row in selected.iterrows():
         file_path = row.get("file_path", "")
         risk_score = row.get("risk_score", "")
 
-        summary = (
+        summaries.append(
             f"commit-risk | {file_path} | risk score: {risk_score}"
         )
-
-        summaries.append(summary)
 
     return " ; ".join(summaries)
 
 
-def calculate_decision(commit_df, cppcheck_df, clang_df):
+def get_anomaly_summary(anomaly_df):
+    if anomaly_df.empty:
+        return {
+            "anomaly_status": "NOT_AVAILABLE",
+            "anomaly_score": "",
+            "anomaly_reason": "ML3 anomaly report not available"
+        }
+
+    row = anomaly_df.iloc[0]
+
+    return {
+        "anomaly_status": row.get("anomaly_status", "NOT_AVAILABLE"),
+        "anomaly_score": row.get("anomaly_score", ""),
+        "anomaly_reason": (
+            f"ML3 pipeline anomaly status: {row.get('anomaly_status', 'NOT_AVAILABLE')}, "
+            f"score: {row.get('anomaly_score', '')}"
+        )
+    }
+
+
+def calculate_decision(commit_df, cppcheck_df, clang_df, anomaly_df):
     alerts_combined = pd.concat(
         [cppcheck_df, clang_df],
         ignore_index=True
@@ -107,9 +123,16 @@ def calculate_decision(commit_df, cppcheck_df, clang_df):
         commit_medium_count = commit_df["risk_level"].eq("MEDIUM").sum()
         commit_low_count = commit_df["risk_level"].eq("LOW").sum()
 
+    anomaly_summary = get_anomaly_summary(anomaly_df)
+    anomaly_status = anomaly_summary["anomaly_status"]
+
     if commit_high_count > 0 or alert_high_count > 0:
         decision = "BLOCK"
         reason = "High commit risk or high severity security alerts detected"
+
+    elif anomaly_status == "ANOMALOUS":
+        decision = "REVIEW"
+        reason = "Anomalous CI/CD pipeline behaviour detected by ML3"
 
     elif commit_medium_count > 0 or alert_medium_count > 0:
         decision = "REVIEW"
@@ -121,7 +144,7 @@ def calculate_decision(commit_df, cppcheck_df, clang_df):
         if commit_low_count > 0 or alert_low_count > 0:
             reason = "Only low risk findings detected"
         else:
-            reason = "No commit risk or security alerts detected"
+            reason = "No commit risk, security alerts, or anomaly detected"
 
     return {
         "decision": decision,
@@ -134,6 +157,10 @@ def calculate_decision(commit_df, cppcheck_df, clang_df):
         "alert_high_count": alert_high_count,
         "alert_medium_count": alert_medium_count,
         "alert_low_count": alert_low_count,
+
+        "anomaly_status": anomaly_summary["anomaly_status"],
+        "anomaly_score": anomaly_summary["anomaly_score"],
+        "anomaly_reason": anomaly_summary["anomaly_reason"],
 
         "commit_high_issues": build_commit_risk_summary(commit_df, "HIGH"),
         "commit_medium_issues": build_commit_risk_summary(commit_df, "MEDIUM"),
@@ -152,11 +179,7 @@ def write_decision(result):
     )
 
     df = pd.DataFrame([result])
-
-    df.to_csv(
-        OUTPUT_FILE,
-        index=False
-    )
+    df.to_csv(OUTPUT_FILE, index=False)
 
     print("\n===== FINAL SECURITY DECISION =====")
     print(f"Decision: {result['decision']}")
@@ -171,6 +194,10 @@ def write_decision(result):
     print(f"HIGH alerts: {result['alert_high_count']}")
     print(f"MEDIUM alerts: {result['alert_medium_count']}")
     print(f"LOW alerts: {result['alert_low_count']}")
+
+    print("\n===== ML 3 PIPELINE ANOMALY SUMMARY =====")
+    print(f"Anomaly status: {result['anomaly_status']}")
+    print(f"Anomaly score: {result['anomaly_score']}")
 
     if result["commit_high_issues"]:
         print("\nHIGH commit risk files:")
@@ -196,25 +223,16 @@ def write_decision(result):
 
 
 def main():
-    commit_df = load_report(
-        COMMIT_RISK_REPORT,
-        "Commit risk"
-    )
-
-    cppcheck_df = load_report(
-        CPPCHECK_REPORT,
-        "Cppcheck"
-    )
-
-    clang_df = load_report(
-        CLANG_REPORT,
-        "Clang"
-    )
+    commit_df = load_report(COMMIT_RISK_REPORT, "Commit risk")
+    cppcheck_df = load_report(CPPCHECK_REPORT, "Cppcheck")
+    clang_df = load_report(CLANG_REPORT, "Clang")
+    anomaly_df = load_report(ANOMALY_REPORT, "ML3 anomaly")
 
     result = calculate_decision(
         commit_df,
         cppcheck_df,
-        clang_df
+        clang_df,
+        anomaly_df
     )
 
     write_decision(result)
