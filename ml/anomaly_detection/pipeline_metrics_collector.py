@@ -16,10 +16,6 @@ CLANG_REPORT = (
     "reports/alert_prioritizer/clang/prioritised-alerts.csv"
 )
 
-DECISION_REPORT = (
-    "reports/final_decision/security_decision.csv"
-)
-
 HISTORY_OUTPUT_DIR = Path(".devsecops/anomaly_detection")
 HISTORY_OUTPUT_FILE = HISTORY_OUTPUT_DIR / "pipeline_metrics.csv"
 
@@ -58,7 +54,6 @@ def main():
     commit_df = safe_read_csv(COMMIT_RISK_REPORT)
     cppcheck_df = safe_read_csv(CPPCHECK_REPORT)
     clang_df = safe_read_csv(CLANG_REPORT)
-    decision_df = safe_read_csv(DECISION_REPORT)
 
     combined_alerts = pd.concat(
         [cppcheck_df, clang_df],
@@ -89,11 +84,6 @@ def main():
     else:
         alerts_per_file = 0
 
-    decision = "UNKNOWN"
-
-    if not decision_df.empty:
-        decision = decision_df.iloc[0]["decision"]
-
     run_data = {
         "timestamp": int(time.time()),
 
@@ -109,15 +99,17 @@ def main():
         "medium_commit_risk": medium_commit_risk,
         "low_commit_risk": low_commit_risk,
 
-        "alerts_per_file": alerts_per_file,
-
-        "decision": decision
+        "alerts_per_file": alerts_per_file
     }
 
     new_row = pd.DataFrame([run_data])
 
     if HISTORY_OUTPUT_FILE.exists():
         existing_df = pd.read_csv(HISTORY_OUTPUT_FILE)
+
+        if "decision" in existing_df.columns:
+            existing_df = existing_df.drop(columns=["decision"])
+
         updated_df = pd.concat(
             [existing_df, new_row],
             ignore_index=True
