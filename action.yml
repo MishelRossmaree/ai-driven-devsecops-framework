@@ -41,14 +41,25 @@ runs:
           --enable=all \
           --inconclusive \
           --xml \
+          --exclude=.devsecops \
+          --exclude=reports \
+          --exclude=.git \
           "${{ inputs.scan-path }}" \
           2> reports/cppcheck-report.xml || true
 
     - name: Run Clang Static Analyzer
       shell: bash
       run: |
-        C_FILES=$(find "${{ inputs.scan-path }}" \( -name "*.c" \))
-        CPP_FILES=$(find "${{ inputs.scan-path }}" \( -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" \))
+        C_FILES=$(find "${{ inputs.scan-path }}" \
+          -path "*/.devsecops" -prune -o \
+          -path "*/reports" -prune -o \
+          -path "*/.git" -prune -o \
+          -name "*.c" -print)
+        CPP_FILES=$(find "${{ inputs.scan-path }}" \
+          -path "*/.devsecops" -prune -o \
+          -path "*/reports" -prune -o \
+          -path "*/.git" -prune -o \
+          \( -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" \) -print)
 
         echo "C files found for Clang analysis:"
         echo "$C_FILES"

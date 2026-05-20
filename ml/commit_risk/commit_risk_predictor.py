@@ -6,11 +6,20 @@ from pathlib import Path
 
 SUPPORTED_EXTENSIONS = [".c", ".cpp", ".cc", ".cxx", ".h", ".hpp"]
 
+EXCLUDED_DIRS = {
+    ".git",
+    "reports",
+    ".devsecops"
+}
+
 
 def read_source_files(source_dir):
     code_files = []
 
     for file_path in Path(source_dir).rglob("*"):
+        if any(part in EXCLUDED_DIRS for part in file_path.parts):
+            continue
+
         if file_path.suffix in SUPPORTED_EXTENSIONS:
             try:
                 code = file_path.read_text(encoding="utf-8", errors="ignore")
