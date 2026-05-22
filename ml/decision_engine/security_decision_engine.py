@@ -238,7 +238,12 @@ def main():
     write_decision(result)
 
     if result["decision"] == "BLOCK":
-        print("\nPipeline blocked due to high commit risk or high severity alerts.")
+        print("\n==============================")
+        print("SECURITY GATE: BLOCK")
+        print("==============================")
+        print("This commit is blocked from merging into the protected main branch.")
+        print(f"Reason: {result['reason']}")
+        print("Action required: Fix the security issue or request manual review.")
         raise SystemExit(1)
 
     if result["decision"] == "REVIEW":
