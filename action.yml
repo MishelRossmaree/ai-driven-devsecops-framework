@@ -42,6 +42,7 @@ runs:
           --enable=all \
           --inconclusive \
           --xml \
+          -I include \
           -i.devsecops \
           -ireports \
           -i.git \
