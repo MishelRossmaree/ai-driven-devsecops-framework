@@ -147,6 +147,7 @@ runs:
         python3 "$GITHUB_ACTION_PATH/ml/anomaly_detection/anomaly_detector.py"
 
     - name: Persist ML3 state in target repository
+      if: github.event_name == 'push'
       shell: bash
       run: |
         if [ -d ".devsecops/anomaly_detection" ]; then
@@ -158,8 +159,9 @@ runs:
           if git diff --cached --quiet; then
             echo "No ML3 state changes to commit."
           else
-            git commit -m "Update ML3 anomaly detection state [skip ci]"
-            git push
+            git commit -m "Update ML3 anomaly detection state"
+            CURRENT_BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+            git push origin HEAD:$CURRENT_BRANCH
           fi
         else
           echo "No ML3 state directory found."
