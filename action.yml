@@ -147,7 +147,7 @@ runs:
         python3 "$GITHUB_ACTION_PATH/ml/anomaly_detection/anomaly_detector.py"
 
     - name: Persist ML3 state in target repository
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' && github.ref_name != 'main'
       shell: bash
       run: |
         if [ -d ".devsecops/anomaly_detection" ]; then
