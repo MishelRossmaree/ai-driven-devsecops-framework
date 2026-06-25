@@ -6,6 +6,10 @@ inputs:
     description: "Path to scan in the target repository"
     required: false
     default: "."
+  ml3-min-rows:
+    description: "Minimum historical ML3 rows required before anomaly model training"
+    required: false
+    default: "30"
 
 runs:
   using: "composite"
@@ -138,6 +142,8 @@ runs:
 
     - name: Train ML3 anomaly detection models
       shell: bash
+      env:
+        ML3_MIN_ROWS: ${{ inputs.ml3-min-rows }}
       run: |
         python3 "$GITHUB_ACTION_PATH/ml/anomaly_detection/train_anomaly_model.py"
 

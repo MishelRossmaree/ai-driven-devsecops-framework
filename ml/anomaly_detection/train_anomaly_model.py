@@ -1,3 +1,4 @@
+import os
 import json
 import time
 import joblib
@@ -19,7 +20,7 @@ SCALER_PATH = MODEL_DIR / "anomaly_scaler.pkl"
 METADATA_PATH = MODEL_DIR / "anomaly_model_metadata.json"
 COMPARISON_REPORT = REPORT_DIR / "anomaly_model_comparison.csv"
 
-MIN_ROWS = 30
+DEFAULT_MIN_ROWS = 30
 
 FEATURE_COLUMNS = [
     "total_files_scanned",
@@ -48,6 +49,39 @@ def load_dataset():
     df[FEATURE_COLUMNS] = df[FEATURE_COLUMNS].fillna(0)
 
     return df
+
+
+def get_min_rows():
+    value = os.environ.get("ML3_MIN_ROWS", str(DEFAULT_MIN_ROWS)).strip()
+
+    try:
+        parsed = int(value)
+        if parsed <= 0:
+            raise ValueError
+        return parsed
+    except Exception:
+        print(
+            f"Invalid ML3_MIN_ROWS='{value}'. Falling back to {DEFAULT_MIN_ROWS}."
+        )
+        return DEFAULT_MIN_ROWS
+
+
+def write_status_report(status, rows_available, min_rows, reason):
+    status_row = {
+        "status": status,
+        "rows_available": rows_available,
+        "min_rows_required": min_rows,
+        "reason": reason,
+        "model": "",
+        "normal_count": "",
+        "anomaly_count": "",
+        "anomaly_rate": "",
+        "execution_time_seconds": "",
+        "score_min": "",
+        "score_max": ""
+    }
+
+    pd.DataFrame([status_row]).to_csv(COMPARISON_REPORT, index=False)
 
 
 def evaluate_model(name, model, X):
@@ -82,13 +116,26 @@ def main():
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
     df = load_dataset()
+    min_rows = get_min_rows()
 
     if df.empty:
         print("No ML3 metrics available for training.")
+        write_status_report(
+            status="SKIPPED",
+            rows_available=0,
+            min_rows=min_rows,
+            reason="No ML3 metrics history found"
+        )
         return
 
-    if len(df) < MIN_ROWS:
-        print(f"Not enough ML3 history for training. Current rows: {len(df)} / {MIN_ROWS}")
+    if len(df) < min_rows:
+        print(f"Not enough ML3 history for training. Current rows: {len(df)} / {min_rows}")
+        write_status_report(
+            status="SKIPPED",
+            rows_available=len(df),
+            min_rows=min_rows,
+            reason="Not enough historical rows for model training"
+        )
         return
 
     X = df[FEATURE_COLUMNS]
@@ -121,6 +168,9 @@ def main():
         results.append(result)
 
     results_df = pd.DataFrame(results)
+    results_df.insert(0, "status", "TRAINED")
+    results_df.insert(1, "rows_available", len(df))
+    results_df.insert(2, "min_rows_required", min_rows)
     results_df.to_csv(COMPARISON_REPORT, index=False)
 
     final_model = IsolationForest(
@@ -146,6 +196,7 @@ def main():
 
     print("\nML3 anomaly model training completed.")
     print(f"Training rows: {len(df)}")
+    print(f"Minimum rows required: {min_rows}")
     print(f"Model saved to: {MODEL_PATH}")
     print(f"Scaler saved to: {SCALER_PATH}")
     print(f"Comparison report saved to: {COMPARISON_REPORT}")

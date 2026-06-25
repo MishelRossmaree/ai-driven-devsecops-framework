@@ -28,18 +28,49 @@ FEATURE_COLUMNS = [
 def main():
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
+    def write_not_available(reason, latest_row=None):
+        result = {
+            "model": "NOT_AVAILABLE",
+            "anomaly_status": "NOT_AVAILABLE",
+            "anomaly_score": "",
+            "reason": reason,
+            "total_files_scanned": 0,
+            "total_alerts": 0,
+            "high_alerts": 0,
+            "medium_alerts": 0,
+            "low_alerts": 0,
+            "high_commit_risk": 0,
+            "medium_commit_risk": 0,
+            "low_commit_risk": 0,
+            "alerts_per_file": 0.0
+        }
+
+        if latest_row is not None:
+            result.update({
+                "total_files_scanned": int(latest_row["total_files_scanned"].iloc[0]),
+                "total_alerts": int(latest_row["total_alerts"].iloc[0]),
+                "high_alerts": int(latest_row["high_alerts"].iloc[0]),
+                "medium_alerts": int(latest_row["medium_alerts"].iloc[0]),
+                "low_alerts": int(latest_row["low_alerts"].iloc[0]),
+                "high_commit_risk": int(latest_row["high_commit_risk"].iloc[0]),
+                "medium_commit_risk": int(latest_row["medium_commit_risk"].iloc[0]),
+                "low_commit_risk": int(latest_row["low_commit_risk"].iloc[0]),
+                "alerts_per_file": float(latest_row["alerts_per_file"].iloc[0])
+            })
+
+        pd.DataFrame([result]).to_csv(REPORT_FILE, index=False)
+        print(f"ML3 anomaly detection status report saved to: {REPORT_FILE}")
+
     if not HISTORY_FILE.exists():
         print("No pipeline metrics history found. Skipping anomaly detection.")
-        return
-
-    if not MODEL_PATH.exists() or not SCALER_PATH.exists():
-        print("No trained ML3 anomaly model found. Skipping anomaly detection.")
+        write_not_available("Pipeline metrics history not found")
         return
 
     df = pd.read_csv(HISTORY_FILE)
 
     if df.empty:
         print("Pipeline metrics history is empty. Skipping anomaly detection.")
+        write_not_available("Pipeline metrics history is empty")
         return
 
     for col in FEATURE_COLUMNS:
@@ -48,6 +79,14 @@ def main():
 
     latest_row = df.tail(1).copy()
     X_latest = latest_row[FEATURE_COLUMNS].fillna(0)
+
+    if not MODEL_PATH.exists() or not SCALER_PATH.exists():
+        print("No trained ML3 anomaly model found. Skipping anomaly detection.")
+        write_not_available(
+            "No trained ML3 anomaly model found",
+            latest_row=latest_row
+        )
+        return
 
     model = joblib.load(MODEL_PATH)
     scaler = joblib.load(SCALER_PATH)
@@ -70,6 +109,7 @@ def main():
         "model": selected_model,
         "anomaly_status": anomaly_status,
         "anomaly_score": round(float(score), 4),
+        "reason": "Scored using trained ML3 anomaly model",
         "total_files_scanned": int(latest_row["total_files_scanned"].iloc[0]),
         "total_alerts": int(latest_row["total_alerts"].iloc[0]),
         "high_alerts": int(latest_row["high_alerts"].iloc[0]),
