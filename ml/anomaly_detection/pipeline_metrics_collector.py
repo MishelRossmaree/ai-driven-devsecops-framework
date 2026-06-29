@@ -8,6 +8,10 @@ COMMIT_RISK_REPORT = (
     "reports/commit_risk/commit_risk_report.csv"
 )
 
+COMMIT_RISK_SUMMARY_REPORT = (
+    "reports/commit_risk/commit_risk_summary.csv"
+)
+
 CPPCHECK_REPORT = (
     "reports/alert_prioritizer/cppcheck/prioritised-alerts.csv"
 )
@@ -52,6 +56,7 @@ def main():
     REPORT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     commit_df = safe_read_csv(COMMIT_RISK_REPORT)
+    commit_summary_df = safe_read_csv(COMMIT_RISK_SUMMARY_REPORT)
     cppcheck_df = safe_read_csv(CPPCHECK_REPORT)
     clang_df = safe_read_csv(CLANG_REPORT)
 
@@ -74,7 +79,13 @@ def main():
     medium_commit_risk = count_risk(commit_df, "MEDIUM")
     low_commit_risk = count_risk(commit_df, "LOW")
 
-    total_files_scanned = len(commit_df)
+    if (
+        not commit_summary_df.empty and
+        "total_changed_files" in commit_summary_df.columns
+    ):
+        total_files_scanned = int(commit_summary_df.iloc[0]["total_changed_files"])
+    else:
+        total_files_scanned = len(commit_df)
 
     if total_files_scanned > 0:
         alerts_per_file = round(

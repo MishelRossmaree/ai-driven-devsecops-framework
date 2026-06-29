@@ -116,10 +116,12 @@ def calculate_decision(commit_df, cppcheck_df, clang_df, anomaly_df):
 
     if commit_df.empty:
         commit_high_count = 0
+        commit_review_required_count = 0
         commit_medium_count = 0
         commit_low_count = 0
     else:
         commit_high_count = commit_df["risk_level"].eq("HIGH").sum()
+        commit_review_required_count = commit_df["risk_level"].eq("REVIEW_REQUIRED").sum()
         commit_medium_count = commit_df["risk_level"].eq("MEDIUM").sum()
         commit_low_count = commit_df["risk_level"].eq("LOW").sum()
 
@@ -129,6 +131,10 @@ def calculate_decision(commit_df, cppcheck_df, clang_df, anomaly_df):
     if commit_high_count > 0 or alert_high_count > 0:
         decision = "BLOCK"
         reason = "High commit risk or high severity security alerts detected"
+
+    elif commit_review_required_count > 0:
+        decision = "REVIEW"
+        reason = "Low-confidence ML1 predictions require manual review"
 
     elif anomaly_status == "ANOMALOUS":
         decision = "REVIEW"
@@ -151,6 +157,7 @@ def calculate_decision(commit_df, cppcheck_df, clang_df, anomaly_df):
         "reason": reason,
 
         "commit_high_count": commit_high_count,
+        "commit_review_required_count": commit_review_required_count,
         "commit_medium_count": commit_medium_count,
         "commit_low_count": commit_low_count,
 
@@ -163,6 +170,7 @@ def calculate_decision(commit_df, cppcheck_df, clang_df, anomaly_df):
         "anomaly_reason": anomaly_summary["anomaly_reason"],
 
         "commit_high_issues": build_commit_risk_summary(commit_df, "HIGH"),
+        "commit_review_required_issues": build_commit_risk_summary(commit_df, "REVIEW_REQUIRED"),
         "commit_medium_issues": build_commit_risk_summary(commit_df, "MEDIUM"),
         "commit_low_issues": build_commit_risk_summary(commit_df, "LOW"),
 
@@ -186,9 +194,10 @@ def write_decision(result):
     print(f"Reason: {result['reason']}")
 
     print("\n===== ML 1 COMMIT RISK SUMMARY =====")
-    print(f"HIGH commit risk files: {result['commit_high_count']}")
-    print(f"MEDIUM commit risk files: {result['commit_medium_count']}")
-    print(f"LOW commit risk files: {result['commit_low_count']}")
+    print(f"HIGH commit risk functions: {result['commit_high_count']}")
+    print(f"REVIEW_REQUIRED functions: {result['commit_review_required_count']}")
+    print(f"MEDIUM commit risk functions: {result['commit_medium_count']}")
+    print(f"LOW commit risk functions: {result['commit_low_count']}")
 
     print("\n===== ML 2 SAST ALERT SUMMARY =====")
     print(f"HIGH alerts: {result['alert_high_count']}")
@@ -200,11 +209,15 @@ def write_decision(result):
     print(f"Anomaly score: {result['anomaly_score']}")
 
     if result["commit_high_issues"]:
-        print("\nHIGH commit risk files:")
+        print("\nHIGH commit risk functions:")
         print(result["commit_high_issues"])
 
+    if result["commit_review_required_issues"]:
+        print("\nREVIEW_REQUIRED functions:")
+        print(result["commit_review_required_issues"])
+
     if result["commit_medium_issues"]:
-        print("\nMEDIUM commit risk files:")
+        print("\nMEDIUM commit risk functions:")
         print(result["commit_medium_issues"])
 
     if result["alert_high_issues"]:

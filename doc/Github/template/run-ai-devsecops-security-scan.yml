@@ -1,0 +1,49 @@
+name: Run AI DevSecOps Security Scan
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.c'
+      - '**/*.cpp'
+      - '**/*.cc'
+      - '**/*.cxx'
+      - '**/*.h'
+      - '**/*.hpp'
+
+  pull_request:
+    paths:
+      - '**/*.c'
+      - '**/*.cpp'
+      - '**/*.cc'
+      - '**/*.cxx'
+      - '**/*.h'
+      - '**/*.hpp'
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  security-scan:
+    name: security-scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout target project
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Run AI DevSecOps Framework
+        uses: MishelRossmaree/ai-driven-devsecops-framework@main
+        with:
+          scan-path: "."
+          # Optional tuning inputs
+          # ml1-high-threshold: "70"
+          # ml1-medium-threshold: "40"
+          # ml1-review-confidence-threshold: "0.2"
+          # ml3-min-rows: "30"

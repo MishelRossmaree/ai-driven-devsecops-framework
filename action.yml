@@ -6,6 +6,18 @@ inputs:
     description: "Path to scan in the target repository"
     required: false
     default: "."
+  ml1-high-threshold:
+    description: "ML1 HIGH risk threshold (0-100)"
+    required: false
+    default: "70"
+  ml1-medium-threshold:
+    description: "ML1 MEDIUM risk threshold (0-100)"
+    required: false
+    default: "40"
+  ml1-review-confidence-threshold:
+    description: "ML1 confidence threshold (0-1) below which risk_level becomes REVIEW_REQUIRED"
+    required: false
+    default: "0.2"
   ml3-min-rows:
     description: "Minimum historical ML3 rows required before anomaly model training"
     required: false
@@ -118,11 +130,23 @@ runs:
 
     - name: Run ML1 commit risk prediction
       shell: bash
+      env:
+        ML1_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+        ML1_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
       run: |
         python3 "$GITHUB_ACTION_PATH/ml/commit_risk/commit_risk_predictor.py" \
           --scan-path "${{ inputs.scan-path }}" \
           --model-path "$GITHUB_ACTION_PATH/models/commit_risk/commit_risk_model.pkl" \
           --vectorizer-path "$GITHUB_ACTION_PATH/data/features/commit_risk/tfidf_vectorizer.pkl" \
+          --high-threshold "${{ inputs.ml1-high-threshold }}" \
+          --medium-threshold "${{ inputs.ml1-medium-threshold }}" \
+          --review-confidence-threshold "${{ inputs.ml1-review-confidence-threshold }}" \
+          --commit-sha "${{ github.sha }}" \
+          --branch "${{ github.ref_name }}" \
+          --event-type "${{ github.event_name }}" \
+          --author "${{ github.actor }}" \
+          --base-ref "$ML1_BASE_SHA" \
+          --head-ref "$ML1_HEAD_SHA" \
           --output "reports/commit_risk/commit_risk_report.csv"
 
     - name: Run ML2 Cppcheck alert prioritisation
@@ -208,6 +232,14 @@ runs:
       with:
         name: commit-risk-report
         path: reports/commit_risk/commit_risk_report.csv
+        if-no-files-found: ignore
+
+    - name: Upload commit risk summary report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: commit-risk-summary-report
+        path: reports/commit_risk/commit_risk_summary.csv
         if-no-files-found: ignore
 
     - name: Upload Cppcheck prioritised alerts
