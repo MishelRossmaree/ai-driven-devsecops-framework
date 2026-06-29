@@ -6,6 +6,8 @@ This guide explains what to run, in what order, and how to validate ML1 end-to-e
 
 ML1 predicts risk for changed C/C++ functions in a commit or pull request and produces:
 
+ML1 can be described as commit-aware function-level vulnerability risk prediction.
+
 - function-level report
 - commit-level summary report
 
@@ -144,6 +146,13 @@ Each row represents one analyzed function (or fallback file record):
 - `top_risky_terms`: matched high-risk lexical indicators
 - `risk_reason`: explanation text
 
+Sample row:
+
+```csv
+commit_sha,branch,event_type,author,base_ref,head_ref,file_path,function_name,start_line,end_line,risk_score,risk_level,confidence,review_confidence_threshold,top_risky_terms,risk_reason,vectorization_time_ms,model_inference_time_ms,total_prediction_runtime_ms
+7c2f11a,feature/login-hardening,pull_request,mishel,3de210f,7c2f11a,src/auth/login.c,validate_credentials,41,97,63.4,REVIEW_REQUIRED,0.18,0.2,strcpy|buffer|malloc,REVIEW_REQUIRED because model confidence (0.18) is below threshold (0.2). Potential risky terms include strcpy, buffer, malloc.,12.8,4.2,38.7
+```
+
 ### commit_risk_summary.csv
 
 Single-row summary per run:
@@ -205,6 +214,8 @@ Interpretation:
 - `ml1-high-threshold`: 70
 - `ml1-medium-threshold`: 40
 - `ml1-review-confidence-threshold`: 0.2
+
+A threshold of 0.2 means predictions close to 50% probability are treated as uncertain and marked REVIEW_REQUIRED.
 
 Tune these using your validation results and false positive tolerance.
 

@@ -2,6 +2,8 @@
 
 ML1 is the commit risk model in this framework. It predicts security risk for changed C/C++ functions and then aggregates those function-level predictions into a commit-level risk decision.
 
+In dissertation terminology, ML1 is commit-aware function-level vulnerability risk prediction.
+
 ## Why ML1 Is Function-Centric
 
 The training dataset is PRIMEVUL and the model input is function-level code (`function_code`).
