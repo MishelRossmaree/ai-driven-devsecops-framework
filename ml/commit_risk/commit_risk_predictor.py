@@ -2,6 +2,7 @@ import argparse
 import os
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -40,7 +41,11 @@ RISKY_TERMS = [
 ]
 
 
-def run_git_command(args):
+class GitCommandError(RuntimeError):
+    pass
+
+
+def run_git_command(args, context=""):
     try:
         result = subprocess.run(
             ["git", *args],
@@ -48,13 +53,30 @@ def run_git_command(args):
             capture_output=True,
             text=True
         )
-    except Exception:
-        return ""
+    except Exception as exc:
+        detail = f"Git command execution failed for: git {' '.join(args)}"
+        if context:
+            detail = f"{context}: {detail}"
+        raise GitCommandError(f"{detail}. Error: {exc}") from exc
 
     if result.returncode != 0:
-        return ""
+        stderr = (result.stderr or "").strip() or "no stderr output"
+        detail = f"Git command failed (exit {result.returncode}) for: git {' '.join(args)}"
+        if context:
+            detail = f"{context}: {detail}"
+        raise GitCommandError(f"{detail}. stderr: {stderr}")
 
     return result.stdout.strip()
+
+
+def ensure_git_working_tree():
+    inside = run_git_command(
+        ["rev-parse", "--is-inside-work-tree"],
+        context="Git repository validation failed"
+    )
+
+    if inside.lower() != "true":
+        raise RuntimeError("Current directory is not inside a Git working tree.")
 
 
 def is_within_scan_path(repo_root, scan_root, relative_path):
@@ -72,23 +94,21 @@ def resolve_diff_range(base_ref, head_ref):
     head_ref = (head_ref or "").strip()
 
     if base_ref and head_ref:
-        base_ok = run_git_command(["rev-parse", "--verify", base_ref])
-        head_ok = run_git_command(["rev-parse", "--verify", head_ref])
+        run_git_command(["rev-parse", "--verify", base_ref], context=f"Unable to resolve base ref '{base_ref}'")
+        run_git_command(["rev-parse", "--verify", head_ref], context=f"Unable to resolve head ref '{head_ref}'")
+        return f"{base_ref}...{head_ref}"
 
-        if base_ok and head_ok:
-            return f"{base_ref}...{head_ref}"
+    if base_ref or head_ref:
+        raise ValueError("Both base-ref and head-ref must be provided together.")
 
-    if run_git_command(["rev-parse", "--verify", "HEAD~1"]):
+    try:
+        run_git_command(["rev-parse", "--verify", "HEAD~1"], context="Unable to resolve default diff range")
         return "HEAD~1...HEAD"
-
-    return ""
-
+    except GitCommandError as exc:
+        raise ValueError("Could not resolve a valid diff range. Provide --base-ref and --head-ref, or ensure at least two commits exist.") from exc
 
 def get_changed_cpp_files(diff_range, scan_path):
-    if not diff_range:
-        return []
-
-    output = run_git_command(["diff", "--name-only", diff_range])
+    output = run_git_command(["diff", "--name-only", diff_range], context=f"Failed to list changed files for diff range '{diff_range}'")
 
     if not output:
         return []
@@ -155,7 +175,10 @@ def get_changed_lines_by_file(diff_range, changed_files):
     changed_lines = {}
 
     for relative_path in changed_files:
-        diff_text = run_git_command(["diff", "-U0", diff_range, "--", relative_path])
+        diff_text = run_git_command(
+            ["diff", "-U0", diff_range, "--", relative_path],
+            context=f"Failed to read changed lines for file '{relative_path}'"
+        )
         changed_lines[relative_path] = parse_changed_lines_from_diff(diff_text)
 
     return changed_lines
@@ -390,10 +413,10 @@ def aggregate_commit_risk(function_levels):
 
 
 def build_commit_metadata(args):
-    commit_sha = args.commit_sha or os.getenv("GITHUB_SHA", "") or run_git_command(["rev-parse", "HEAD"])
+    commit_sha = args.commit_sha or os.getenv("GITHUB_SHA", "") or run_git_command(["rev-parse", "HEAD"], context="Failed to determine commit SHA")
     branch = args.branch or os.getenv("GITHUB_REF_NAME", "")
     event_type = args.event_type or os.getenv("GITHUB_EVENT_NAME", "")
-    author = args.author or os.getenv("GITHUB_ACTOR", "") or run_git_command(["show", "-s", "--format=%an", "HEAD"])
+    author = args.author or os.getenv("GITHUB_ACTOR", "") or run_git_command(["show", "-s", "--format=%an", "HEAD"], context="Failed to determine commit author")
 
     base_ref = args.base_ref or os.getenv("GITHUB_BASE_REF", "")
     head_ref = args.head_ref or os.getenv("GITHUB_HEAD_REF", "")
@@ -459,147 +482,197 @@ def main():
 
     prediction_start = time.perf_counter()
 
-    if args.medium_threshold >= args.high_threshold:
-        raise ValueError("medium-threshold must be lower than high-threshold")
+    try:
+        if args.medium_threshold >= args.high_threshold:
+            raise ValueError("medium-threshold must be lower than high-threshold")
 
-    if args.review_confidence_threshold < 0 or args.review_confidence_threshold > 1:
-        raise ValueError("review-confidence-threshold must be between 0 and 1")
+        if args.review_confidence_threshold < 0 or args.review_confidence_threshold > 1:
+            raise ValueError("review-confidence-threshold must be between 0 and 1")
 
-    output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+        scan_root = Path(args.scan_path)
+        if not scan_root.exists():
+            raise FileNotFoundError(f"scan-path does not exist: {args.scan_path}")
+        if not scan_root.is_dir():
+            raise ValueError(f"scan-path must be a directory: {args.scan_path}")
 
-    summary_output_path = Path(args.summary_output)
-    summary_output_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_git_working_tree()
 
-    metadata = build_commit_metadata(args)
+        model_path = Path(args.model_path)
+        if not model_path.exists() or not model_path.is_file():
+            raise FileNotFoundError(f"Model file not found: {args.model_path}")
 
-    diff_range = resolve_diff_range(metadata["base_ref"], metadata["head_ref"])
-    changed_files = get_changed_cpp_files(diff_range, args.scan_path)
+        vectorizer_path = Path(args.vectorizer_path)
+        if not vectorizer_path.exists() or not vectorizer_path.is_file():
+            raise FileNotFoundError(f"Vectorizer file not found: {args.vectorizer_path}")
 
-    if not changed_files:
-        print("No C/C++ changes detected. ML1 skipped.")
-        empty_report_df().to_csv(output_path, index=False)
+        try:
+            model = joblib.load(model_path)
+        except Exception as exc:
+            raise RuntimeError(f"Failed to load model file '{args.model_path}': {exc}") from exc
+
+        try:
+            vectorizer = joblib.load(vectorizer_path)
+        except Exception as exc:
+            raise RuntimeError(f"Failed to load vectorizer file '{args.vectorizer_path}': {exc}") from exc
+
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        summary_output_path = Path(args.summary_output)
+        summary_output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        metadata = build_commit_metadata(args)
+
+        diff_range = resolve_diff_range(metadata["base_ref"], metadata["head_ref"])
+        changed_files = get_changed_cpp_files(diff_range, args.scan_path)
+
+        if not changed_files:
+            print("No C/C++ changes detected. ML1 skipped.")
+            empty_report_df().to_csv(output_path, index=False)
+
+            summary_row = {
+                **metadata,
+                "total_changed_files": 0,
+                "total_changed_functions": 0,
+                "high_risk_functions": 0,
+                "review_required_functions": 0,
+                "medium_risk_functions": 0,
+                "low_risk_functions": 0,
+                "max_risk_score": 0.0,
+                "commit_risk_level": "SKIPPED",
+                "status": "SKIPPED",
+                "reason": "No changed C/C++ files detected in the resolved diff range.",
+                "vectorization_time_ms": 0.0,
+                "model_inference_time_ms": 0.0,
+                "total_prediction_runtime_ms": round((time.perf_counter() - prediction_start) * 1000, 2)
+            }
+
+            pd.DataFrame([summary_row]).to_csv(summary_output_path, index=False)
+            return
+
+        changed_lines_by_file = get_changed_lines_by_file(diff_range, changed_files)
+
+        repo_root = Path.cwd().resolve()
+        function_items = []
+
+        for relative_path in changed_files:
+            file_items = extract_changed_functions(
+                repo_root,
+                relative_path,
+                changed_lines_by_file.get(relative_path, set())
+            )
+            function_items.extend(file_items)
+
+        if not function_items:
+            print("No analyzable changed functions found. ML1 skipped.")
+            empty_report_df().to_csv(output_path, index=False)
+
+            summary_row = {
+                **metadata,
+                "total_changed_files": len(changed_files),
+                "total_changed_functions": 0,
+                "high_risk_functions": 0,
+                "review_required_functions": 0,
+                "medium_risk_functions": 0,
+                "low_risk_functions": 0,
+                "max_risk_score": 0.0,
+                "commit_risk_level": "SKIPPED",
+                "status": "SKIPPED",
+                "reason": "Changed C/C++ files were found, but no analyzable functions were extracted.",
+                "vectorization_time_ms": 0.0,
+                "model_inference_time_ms": 0.0,
+                "total_prediction_runtime_ms": round((time.perf_counter() - prediction_start) * 1000, 2)
+            }
+
+            pd.DataFrame([summary_row]).to_csv(summary_output_path, index=False)
+            return
+
+        functions_df = pd.DataFrame(function_items)
+
+        vectorization_start = time.perf_counter()
+        features = vectorizer.transform(functions_df["function_code"])
+        vectorization_time_ms = round((time.perf_counter() - vectorization_start) * 1000, 2)
+
+        inference_start = time.perf_counter()
+        probabilities = model_positive_scores(model, features)
+        model_inference_time_ms = round((time.perf_counter() - inference_start) * 1000, 2)
+
+        rows = []
+        levels = []
+
+        for index, row in functions_df.iterrows():
+            risk_score, risk_level = get_risk_level(
+                probabilities[index],
+                args.medium_threshold,
+                args.high_threshold
+            )
+
+            confidence = calculate_confidence(probabilities[index])
+            risk_level = apply_review_required(
+                risk_level,
+                confidence,
+                args.review_confidence_threshold
+            )
+
+            terms = extract_top_risky_terms(row["function_code"])
+            risk_reason = build_risk_reason(
+                risk_level,
+                terms,
+                row["fallback_used"],
+                confidence,
+                args.review_confidence_threshold
+            )
+
+            levels.append(risk_level)
+
+            rows.append({
+                **metadata,
+                "file_path": row["file_path"],
+                "function_name": row["function_name"],
+                "start_line": row["start_line"],
+                "end_line": row["end_line"],
+                "risk_score": risk_score,
+                "risk_level": risk_level,
+                "confidence": confidence,
+                "review_confidence_threshold": args.review_confidence_threshold,
+                "top_risky_terms": "|".join(terms),
+                "risk_reason": risk_reason,
+                "vectorization_time_ms": vectorization_time_ms,
+                "model_inference_time_ms": model_inference_time_ms,
+                "total_prediction_runtime_ms": 0.0
+            })
+
+        report_df = pd.DataFrame(rows)
+        total_runtime_ms = round((time.perf_counter() - prediction_start) * 1000, 2)
+        report_df["total_prediction_runtime_ms"] = total_runtime_ms
+        report_df.to_csv(output_path, index=False)
 
         summary_row = {
             **metadata,
-            "total_changed_files": 0,
-            "total_changed_functions": 0,
-            "high_risk_functions": 0,
-            "review_required_functions": 0,
-            "medium_risk_functions": 0,
-            "low_risk_functions": 0,
-            "max_risk_score": 0.0,
-            "commit_risk_level": "SKIPPED",
-            "vectorization_time_ms": 0.0,
-            "model_inference_time_ms": 0.0,
-            "total_prediction_runtime_ms": round((time.perf_counter() - prediction_start) * 1000, 2)
+            "total_changed_files": len(changed_files),
+            "total_changed_functions": len(report_df),
+            "high_risk_functions": int(report_df["risk_level"].eq("HIGH").sum()),
+            "review_required_functions": int(report_df["risk_level"].eq("REVIEW_REQUIRED").sum()),
+            "medium_risk_functions": int(report_df["risk_level"].eq("MEDIUM").sum()),
+            "low_risk_functions": int(report_df["risk_level"].eq("LOW").sum()),
+            "max_risk_score": float(report_df["risk_score"].max()) if not report_df.empty else 0.0,
+            "commit_risk_level": aggregate_commit_risk(levels),
+            "status": "COMPLETED",
+            "reason": "Prediction completed successfully.",
+            "vectorization_time_ms": vectorization_time_ms,
+            "model_inference_time_ms": model_inference_time_ms,
+            "total_prediction_runtime_ms": total_runtime_ms
         }
 
         pd.DataFrame([summary_row]).to_csv(summary_output_path, index=False)
-        return
 
-    changed_lines_by_file = get_changed_lines_by_file(diff_range, changed_files)
-
-    repo_root = Path.cwd().resolve()
-    function_items = []
-
-    for relative_path in changed_files:
-        file_items = extract_changed_functions(
-            repo_root,
-            relative_path,
-            changed_lines_by_file.get(relative_path, set())
-        )
-        function_items.extend(file_items)
-
-    if not function_items:
-        print("No analyzable changed functions found. ML1 skipped.")
-        empty_report_df().to_csv(output_path, index=False)
-        return
-
-    model = joblib.load(args.model_path)
-    vectorizer = joblib.load(args.vectorizer_path)
-
-    functions_df = pd.DataFrame(function_items)
-
-    vectorization_start = time.perf_counter()
-    features = vectorizer.transform(functions_df["function_code"])
-    vectorization_time_ms = round((time.perf_counter() - vectorization_start) * 1000, 2)
-
-    inference_start = time.perf_counter()
-    probabilities = model_positive_scores(model, features)
-    model_inference_time_ms = round((time.perf_counter() - inference_start) * 1000, 2)
-
-    rows = []
-    levels = []
-
-    for index, row in functions_df.iterrows():
-        risk_score, risk_level = get_risk_level(
-            probabilities[index],
-            args.medium_threshold,
-            args.high_threshold
-        )
-
-        confidence = calculate_confidence(probabilities[index])
-        risk_level = apply_review_required(
-            risk_level,
-            confidence,
-            args.review_confidence_threshold
-        )
-
-        terms = extract_top_risky_terms(row["function_code"])
-        risk_reason = build_risk_reason(
-            risk_level,
-            terms,
-            row["fallback_used"],
-            confidence,
-            args.review_confidence_threshold
-        )
-
-        levels.append(risk_level)
-
-        rows.append({
-            **metadata,
-            "file_path": row["file_path"],
-            "function_name": row["function_name"],
-            "start_line": row["start_line"],
-            "end_line": row["end_line"],
-            "risk_score": risk_score,
-            "risk_level": risk_level,
-            "confidence": confidence,
-            "review_confidence_threshold": args.review_confidence_threshold,
-            "top_risky_terms": "|".join(terms),
-            "risk_reason": risk_reason,
-            "vectorization_time_ms": vectorization_time_ms,
-            "model_inference_time_ms": model_inference_time_ms,
-            "total_prediction_runtime_ms": 0.0
-        })
-
-    report_df = pd.DataFrame(rows)
-    total_runtime_ms = round((time.perf_counter() - prediction_start) * 1000, 2)
-    report_df["total_prediction_runtime_ms"] = total_runtime_ms
-    report_df.to_csv(output_path, index=False)
-
-    summary_row = {
-        **metadata,
-        "total_changed_files": len(changed_files),
-        "total_changed_functions": len(report_df),
-        "high_risk_functions": int(report_df["risk_level"].eq("HIGH").sum()),
-        "review_required_functions": int(report_df["risk_level"].eq("REVIEW_REQUIRED").sum()),
-        "medium_risk_functions": int(report_df["risk_level"].eq("MEDIUM").sum()),
-        "low_risk_functions": int(report_df["risk_level"].eq("LOW").sum()),
-        "max_risk_score": float(report_df["risk_score"].max()) if not report_df.empty else 0.0,
-        "commit_risk_level": aggregate_commit_risk(levels),
-        "vectorization_time_ms": vectorization_time_ms,
-        "model_inference_time_ms": model_inference_time_ms,
-        "total_prediction_runtime_ms": total_runtime_ms
-    }
-
-    pd.DataFrame([summary_row]).to_csv(summary_output_path, index=False)
-
-    print("\nCommit Risk Prediction Completed")
-    print(report_df)
-    print(f"\nDetailed report saved to: {output_path}")
-    print(f"Summary report saved to: {summary_output_path}")
+        print("\nCommit Risk Prediction Completed")
+        print(report_df)
+        print(f"\nDetailed report saved to: {output_path}")
+        print(f"Summary report saved to: {summary_output_path}")
+    except (GitCommandError, FileNotFoundError, ValueError, RuntimeError) as exc:
+        print(f"FAILED: {exc}", file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

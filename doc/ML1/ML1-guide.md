@@ -96,6 +96,46 @@ Optional metadata args for non-GitHub local runs:
 - `--base-ref`
 - `--head-ref`
 
+## Runtime Execution Outcomes
+
+ML1 runtime now has three explicit outcomes:
+
+### COMPLETED
+
+- Prediction completed successfully.
+- Both reports are generated:
+  - `reports/commit_risk/commit_risk_report.csv`
+  - `reports/commit_risk/commit_risk_summary.csv`
+
+### SKIPPED
+
+- No changed C/C++ files were detected, or
+- Changed C/C++ files were found but no analyzable functions were extracted.
+- Both reports are still generated.
+- Summary includes skip context in `status` and `reason`.
+
+### FAILED
+
+- Invalid Git repository (not inside a Git working tree).
+- Git diff range could not be resolved.
+- Invalid scan path (missing path or not a directory).
+- Missing or unreadable model file.
+- Missing or unreadable TF-IDF vectorizer file.
+- ML1 exits with a non-zero exit code.
+
+## Runtime Workflow
+
+Current runtime workflow:
+
+```mermaid
+flowchart TD
+    A[Validate prerequisites] --> B[Validate Git repository]
+    B --> C[Resolve Git diff]
+    C --> D[Extract changed functions]
+    D --> E[Predict risk]
+    E --> F[Generate reports]
+```
+
 ## Runtime Inference in GitHub Actions
 
 Use the framework action in target repo workflow:
@@ -136,6 +176,13 @@ Predictor-level core args:
 
 ## How to Read ML1 Output
 
+ML1 generates two runtime outputs:
+
+- `reports/commit_risk/commit_risk_report.csv`
+- `reports/commit_risk/commit_risk_summary.csv`
+
+For both COMPLETED and SKIPPED outcomes, both files are produced.
+
 ### commit_risk_report.csv
 
 Each row represents one analyzed function (or fallback file record):
@@ -161,7 +208,11 @@ Single-row summary per run:
 - counts by risk category
 - max score
 - final `commit_risk_level`
+- execution `status`
+- execution `reason`
 - runtime metrics
+
+`status` and `reason` indicate whether execution was COMPLETED or SKIPPED, and why.
 
 ## Decision Semantics
 
@@ -187,6 +238,18 @@ Interpretation:
 
 ## Common Issues and Fixes
 
+## Reliability and Error Handling
+
+ML1 now enforces startup and runtime validation before prediction:
+
+- validates `scan-path` exists and is a directory
+- validates execution is inside a Git working tree
+- validates trained model file exists and is readable
+- validates TF-IDF vectorizer file exists and is readable
+- treats Git command failures as FAILED (not SKIPPED)
+
+When these checks fail, ML1 reports a FAILED outcome and exits non-zero.
+
 ### ML1 says no C/C++ changes detected
 
 - Check trigger path filters.
@@ -202,6 +265,10 @@ Interpretation:
 
 - Run training pipeline steps first.
 - Verify paths in predictor arguments.
+
+## Evaluation Notes
+
+During model evaluation, ROC-AUC may be unavailable for specific splits (for example, single-class target distributions). In that case, ML1 records ROC-AUC as unavailable instead of writing a misleading `0.0`.
 
 ### PR behavior differs from push behavior
 
@@ -223,4 +290,4 @@ Tune these using your validation results and false positive tolerance.
 
 - [doc/ML1/ML1-OVERVIEW.md](doc/ML1/ML1-OVERVIEW.md)
 - [doc/Github/OVERVIEW.md](doc/Github/OVERVIEW.md)
-- [doc/Github/Github.md](doc/Github/Github.md)
+- [doc/Github/Github-guide.md](doc/Github/Github-guide.md)

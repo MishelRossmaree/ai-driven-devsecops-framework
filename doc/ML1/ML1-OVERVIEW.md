@@ -218,21 +218,23 @@ Without these offline artifacts, ML1 inference cannot run.
 
 ```mermaid
 flowchart TD
-    A[GitHub push or pull_request] --> B[Resolve diff range]
-    B --> C[Collect changed C/C++ files]
-    C --> D[Parse changed line numbers]
-    D --> E[Extract containing functions]
-    E --> F[Fallback to full file if extraction fails]
-    E --> G[TF-IDF transform]
-    F --> G
-    G --> H[Model scores probability]
-    H --> I[Compute risk score and base risk level]
-    I --> J[Compute confidence]
-    J --> K[Apply REVIEW_REQUIRED gate]
-    K --> L[Add explainability]
-    L --> M[Write function-level report]
-    M --> N[Aggregate commit-level risk]
-    N --> O[Write commit summary report]
+  A[GitHub push or pull_request] --> B[Validate prerequisites]
+  B --> C[Validate Git repository]
+  C --> D[Resolve Git diff]
+  D --> E[Collect changed C/C++ files]
+  E --> F[Parse changed line numbers]
+  F --> G[Extract containing functions]
+  G --> H[Fallback to full file if extraction fails]
+  G --> I[TF-IDF transform]
+  H --> I
+  I --> J[Model scores probability]
+  J --> K[Compute risk score and base risk level]
+  K --> L[Compute confidence]
+  L --> M[Apply REVIEW_REQUIRED gate]
+  M --> N[Add explainability]
+  N --> O[Write function-level report]
+  O --> P[Aggregate commit-level risk]
+  P --> Q[Write commit summary report]
 ```
 
 ## Runtime Logic Details
@@ -243,9 +245,10 @@ ML1 resolves diff range in this order:
 
 1. If `base_ref` and `head_ref` are provided and valid: `base_ref...head_ref`
 2. Else fallback: `HEAD~1...HEAD`
-3. Else no diff range available
+3. Else runtime fails with FAILED outcome
 
-If no valid diff range is available or no changed C/C++ files are found, ML1 writes empty/skipped outputs and exits successfully.
+If no changed C/C++ files are found, ML1 writes skipped outputs and exits successfully.
+If diff range resolution fails, ML1 reports FAILED and exits non-zero.
 
 ### 2) Changed file detection
 
@@ -353,8 +356,14 @@ Columns:
 - commit metadata: `commit_sha`, `branch`, `event_type`, `author`, `base_ref`, `head_ref`
 - counters: `total_changed_files`, `total_changed_functions`
 - risk counts: `high_risk_functions`, `review_required_functions`, `medium_risk_functions`, `low_risk_functions`
-- score/decision: `max_risk_score`, `commit_risk_level`
+- score/decision: `max_risk_score`, `commit_risk_level`, `status`, `reason`
 - runtime metrics: `vectorization_time_ms`, `model_inference_time_ms`, `total_prediction_runtime_ms`
+
+Report generation behavior:
+
+- COMPLETED: both `commit_risk_report.csv` and `commit_risk_summary.csv` are generated
+- SKIPPED: both `commit_risk_report.csv` and `commit_risk_summary.csv` are generated
+- FAILED: execution exits non-zero
 
 ## Runtime Inputs
 
@@ -379,11 +388,25 @@ In GitHub Actions, these are passed by the composite action from workflow inputs
 
 ## Failure and Skip Behavior
 
-- No C/C++ changes: ML1 writes skip-style outputs with `commit_risk_level=SKIPPED`.
+- No C/C++ changes: ML1 writes skip-style outputs with `commit_risk_level=SKIPPED` and summary `status/reason`.
+- Changed files but no analyzable functions: ML1 writes skip-style outputs with `commit_risk_level=SKIPPED` and summary `status/reason`.
 - Function extraction failure for a file: ML1 falls back to full-file analysis for that file.
+- Startup validation failures (invalid scan path, invalid Git repository, missing or unreadable model/vectorizer): ML1 reports FAILED and exits non-zero.
+- Git execution failures or unresolved diff ranges are treated as FAILED rather than SKIPPED.
 - Invalid thresholds:
   - medium threshold must be less than high threshold
   - review confidence threshold must be between 0 and 1
+
+## Reliability and Error Handling
+
+ML1 reliability checks now explicitly validate:
+
+- scan path exists and is a directory
+- execution context is a Git working tree
+- trained model file exists and loads successfully
+- TF-IDF vectorizer file exists and loads successfully
+
+Git command failures are surfaced as FAILED outcomes and are not silently treated as empty change sets.
 
 ## Integration with Final Decision Engine
 
@@ -403,6 +426,10 @@ ML1 reports:
 - total prediction runtime
 
 These are useful for CI tuning and scalability analysis.
+
+## Evaluation Notes
+
+During model evaluation in training, ROC-AUC can be unavailable for some label distributions. When that occurs, it is reported as unavailable rather than recorded as `0.0`.
 
 ## Limitations to Keep in Mind
 

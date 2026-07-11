@@ -61,8 +61,9 @@ def evaluate_model(model_name, model, X, y):
 
     try:
         roc_auc = roc_auc_score(y, scores)
-    except Exception:
-        roc_auc = 0.0
+    except ValueError as exc:
+        print(f"ROC-AUC unavailable for {model_name}: {exc}")
+        roc_auc = np.nan
 
     results = {
         "model": model_name,
