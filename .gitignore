@@ -1,14 +1,40 @@
+# -------------------------
 # Training datasets
+# -------------------------
 data/raw/
 data/processed/
 
+# -------------------------
 # Generated feature matrices
-data/features/commit_risk/X_*.pkl
-data/features/commit_risk/y_*.pkl
+# -------------------------
+data/features/
 
-# Reports
+# -------------------------
+# Runtime reports
+# -------------------------
 reports/
 
+# -------------------------
 # Python cache
+# -------------------------
 __pycache__/
-*.pyc
+*.py[cod]
+
+# -------------------------
+# Virtual environments
+# -------------------------
+.venv/
+venv/
+env/
+
+# -------------------------
+# IDE
+# -------------------------
+.vscode/
+.idea/
+
+# -------------------------
+# OS files
+# -------------------------
+.DS_Store
+Thumbs.db
