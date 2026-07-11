@@ -13,23 +13,36 @@ data/features/
 # Generated reports
 # -------------------------
 
-# Ignore all report files
+# Ignore all generated report files by default
 reports/**
 
-# Keep directory structure
+# Keep the reports directory structure
 !reports/
 !reports/.gitkeep
-!reports/commit_risk/
 
 # Keep final ML1 evaluation artifacts
+!reports/commit_risk/
 !reports/commit_risk/validation_model_comparison.csv
 !reports/commit_risk/test_evaluation.csv
+
+# Keep final ML2 Cppcheck evaluation artifacts
+!reports/alert_prioritizer/
+!reports/alert_prioritizer/cppcheck/
+!reports/alert_prioritizer/cppcheck/validation_model_comparison.csv
+!reports/alert_prioritizer/cppcheck/test_evaluation.csv
+
+# Keep final ML2 Clang evaluation artifacts when generated
+!reports/alert_prioritizer/clang/
+!reports/alert_prioritizer/clang/validation_model_comparison.csv
+!reports/alert_prioritizer/clang/test_evaluation.csv
 
 # -------------------------
 # Python cache
 # -------------------------
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
 
 # -------------------------
 # Virtual environments
@@ -49,3 +62,11 @@ env/
 # -------------------------
 .DS_Store
 Thumbs.db
+
+# -------------------------
+# Logs and temporary files
+# -------------------------
+*.log
+*.tmp
+*.bak
+*.swp

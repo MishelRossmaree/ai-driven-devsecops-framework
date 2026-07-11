@@ -5,6 +5,20 @@ ACTIONABLE_FILE = "data/raw/alert_prioritizer/cppcheck/compressed_ActionableWarn
 NON_ACTIONABLE_FILE = "data/raw/alert_prioritizer/cppcheck/compressed_NonActionableWarning.json.gz"
 OUTPUT_FILE = "data/processed/alert_prioritizer/cppcheck/aw4c_alert_dataset.csv"
 
+# Exact duplicate alert identity fields used for dataset deduplication.
+DUPLICATE_ID_FIELDS = [
+    "tool",
+    "file",
+    "line",
+    "alert_id",
+    "cwe",
+    "severity",
+    "message",
+    "is_actionable",
+    "priority",
+    "label",
+]
+
 
 def load_aw4c_json(path):
     if not os.path.exists(path):
@@ -109,10 +123,19 @@ def main():
     non_actionable_out = transform_dataset(non_actionable_df, is_actionable=False)
 
     final_df = pd.concat([actionable_out, non_actionable_out], ignore_index=True)
+
+    before_dedup = len(final_df)
+    final_df = final_df.drop_duplicates(subset=DUPLICATE_ID_FIELDS, keep="first")
+    after_dedup = len(final_df)
+
     final_df.to_csv(OUTPUT_FILE, index=False)
 
     print(f"Dataset created successfully: {OUTPUT_FILE}")
     print("Dataset shape:", final_df.shape)
+    print(f"Rows before deduplication: {before_dedup}")
+    print(f"Rows after deduplication: {after_dedup}")
+    print(f"Duplicate rows removed: {before_dedup - after_dedup}")
+    print(f"Deduplication fields: {DUPLICATE_ID_FIELDS}")
     print("\nPriority distribution:")
     print(final_df["priority"].value_counts())
 
