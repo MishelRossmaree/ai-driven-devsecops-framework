@@ -1,0 +1,7 @@
+{
+  "model_name": "Logistic Regression",
+  "dataset": "PRIMEVUL",
+  "input_level": "function-level",
+  "feature_type": "TF-IDF",
+  "selected_reason": "Selected based on validation recall and CI/CD suitability"
+}

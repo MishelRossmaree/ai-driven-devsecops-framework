@@ -10,9 +10,20 @@ data/processed/
 data/features/
 
 # -------------------------
-# Runtime reports
+# Generated reports
 # -------------------------
-reports/
+
+# Ignore all report files
+reports/**
+
+# Keep directory structure
+!reports/
+!reports/.gitkeep
+!reports/commit_risk/
+
+# Keep final ML1 evaluation artifacts
+!reports/commit_risk/validation_model_comparison.csv
+!reports/commit_risk/test_evaluation.csv
 
 # -------------------------
 # Python cache
