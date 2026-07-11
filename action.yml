@@ -63,7 +63,7 @@ runs:
           -ireports \
           -i.git \
           "${{ inputs.scan-path }}" \
-          2> reports/cppcheck-report.xml || true
+          2> reports/cppcheck-report.xml
 
     - name: Run Clang Static Analyzer
       shell: bash

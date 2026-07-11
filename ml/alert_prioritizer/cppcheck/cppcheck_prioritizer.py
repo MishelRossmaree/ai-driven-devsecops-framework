@@ -1,5 +1,6 @@
 import csv
 import os
+import sys
 import xml.etree.ElementTree as ET
 import pandas as pd
 import joblib
@@ -22,6 +23,24 @@ IGNORED_ALERT_IDS = {
     "missingIncludeSystem",
     "missingInclude"
 }
+
+REQUIRED_FEATURE_COLUMNS = [
+    "severity_score",
+    "has_cwe",
+    "is_null_pointer",
+    "is_buffer_issue",
+    "is_memory_issue",
+    "is_obsolete_function",
+    "is_cppcheck",
+    "alert_id",
+    "severity",
+    "cwe",
+    "message",
+]
+
+
+class PrioritizerRuntimeError(RuntimeError):
+    pass
 
 
 def severity_to_score(severity):
@@ -57,14 +76,54 @@ def keyword_feature(text, keywords):
     return int(any(keyword in text for keyword in keywords))
 
 
+def validate_report_file():
+    if not os.path.exists(CPPCHECK_REPORT):
+        raise PrioritizerRuntimeError(
+            f"Cppcheck report missing: {CPPCHECK_REPORT}"
+        )
+
+    if os.path.getsize(CPPCHECK_REPORT) == 0:
+        raise PrioritizerRuntimeError(
+            f"Cppcheck report is empty: {CPPCHECK_REPORT}"
+        )
+
+
+def parse_cppcheck_tree():
+    validate_report_file()
+
+    try:
+        tree = ET.parse(CPPCHECK_REPORT)
+    except ET.ParseError as exc:
+        raise PrioritizerRuntimeError(
+            f"Cppcheck report XML is malformed: {CPPCHECK_REPORT}. {exc}"
+        ) from exc
+    except Exception as exc:
+        raise PrioritizerRuntimeError(
+            f"Failed to parse Cppcheck XML report: {CPPCHECK_REPORT}. {exc}"
+        ) from exc
+
+    return tree
+
+
+def load_model():
+    if not os.path.exists(MODEL_PATH):
+        raise PrioritizerRuntimeError(
+            f"Model file not found: {MODEL_PATH}. "
+            "Please train and provide the Cppcheck model artifact."
+        )
+
+    try:
+        return joblib.load(MODEL_PATH)
+    except Exception as exc:
+        raise PrioritizerRuntimeError(
+            f"Failed to load model file: {MODEL_PATH}. {exc}"
+        ) from exc
+
+
 def parse_cppcheck_report():
     alerts = []
 
-    if not os.path.exists(CPPCHECK_REPORT):
-        print("Cppcheck report not found.")
-        return alerts
-
-    tree = ET.parse(CPPCHECK_REPORT)
+    tree = parse_cppcheck_tree()
     root = tree.getroot()
 
     for error in root.findall(".//error"):
@@ -128,33 +187,20 @@ def prepare_features(alerts):
     return df
 
 
-def predict_priorities(df):
+def predict_priorities(df, model):
     if df.empty:
         return df
 
-    if not os.path.exists(MODEL_PATH):
-        raise FileNotFoundError(
-            f"Model file not found: {MODEL_PATH}. "
-            "Please train the model first and commit models/alert_priority_model.pkl."
+    missing_features = [col for col in REQUIRED_FEATURE_COLUMNS if col not in df.columns]
+    if missing_features:
+        raise PrioritizerRuntimeError(
+            f"Required feature columns are missing for prediction: {missing_features}"
         )
 
-    model = joblib.load(MODEL_PATH)
-
-    features = [
-        "severity_score",
-        "has_cwe",
-        "is_null_pointer",
-        "is_buffer_issue",
-        "is_memory_issue",
-        "is_obsolete_function",
-        "is_cppcheck",
-        "alert_id",
-        "severity",
-        "cwe",
-        "message",
-    ]
-
-    predictions = model.predict(df[features])
+    try:
+        predictions = model.predict(df[REQUIRED_FEATURE_COLUMNS])
+    except Exception as exc:
+        raise PrioritizerRuntimeError(f"Prediction failed: {exc}") from exc
 
     df["predicted_label"] = predictions
     df["priority"] = df["predicted_label"].map(LABEL_MAP)
@@ -208,24 +254,41 @@ def write_prioritised_alerts(df):
 
 
 def main():
-    alerts = parse_cppcheck_report()
-    df = prepare_features(alerts)
-    df = predict_priorities(df)
-    write_prioritised_alerts(df)
+    try:
+        # Validate and load the trained model for every run, even zero-alert runs.
+        model = load_model()
 
-    print("===== ML Prioritised Alerts =====")
+        # Validate report and parse alerts.
+        alerts = parse_cppcheck_report()
+        df = prepare_features(alerts)
 
-    if df.empty:
-        print("No real alerts found.")
-        return
+        if df.empty:
+            # Valid XML report with zero non-ignored alerts is a successful outcome.
+            write_prioritised_alerts(df)
+            print("COMPLETED WITH ZERO ALERTS")
+            print("===== ML Prioritised Alerts =====")
+            print("No real alerts found.")
+            return
 
-    for _, alert in df.iterrows():
-        cwe_text = f"CWE-{alert['cwe']}" if alert["cwe"] else "No CWE"
-        print(
-            f"{alert['priority']} | {alert['tool']} | "
-            f"{alert['file']}:{alert['line']} | "
-            f"{alert['alert_id']} | {cwe_text}"
-        )
+        df = predict_priorities(df, model)
+        write_prioritised_alerts(df)
+
+        print("COMPLETED WITH ALERTS")
+        print("===== ML Prioritised Alerts =====")
+
+        for _, alert in df.iterrows():
+            cwe_text = f"CWE-{alert['cwe']}" if alert["cwe"] else "No CWE"
+            print(
+                f"{alert['priority']} | {alert['tool']} | "
+                f"{alert['file']}:{alert['line']} | "
+                f"{alert['alert_id']} | {cwe_text}"
+            )
+    except PrioritizerRuntimeError as exc:
+        print(f"FAILED: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+    except Exception as exc:
+        print(f"FAILED: Unexpected runtime error: {exc}", file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
