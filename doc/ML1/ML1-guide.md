@@ -44,7 +44,7 @@ python3 ml/commit_risk/prepare_commit_features.py
 
 Expected outputs:
 
-- `data/features/commit_risk/tfidf_vectorizer.pkl`
+- `models/commit_risk/tfidf_vectorizer.pkl`
 - `data/features/commit_risk/X_train.pkl`
 - `data/features/commit_risk/X_valid.pkl`
 - `data/features/commit_risk/X_test.pkl`
@@ -79,7 +79,7 @@ Run ML1 predictor on current repo changes.
 python3 ml/commit_risk/commit_risk_predictor.py \
   --scan-path "." \
   --model-path "models/commit_risk/commit_risk_model.pkl" \
-  --vectorizer-path "data/features/commit_risk/tfidf_vectorizer.pkl" \
+  --vectorizer-path "models/commit_risk/tfidf_vectorizer.pkl" \
   --high-threshold "70" \
   --medium-threshold "40" \
   --review-confidence-threshold "0.2" \

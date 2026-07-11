@@ -137,7 +137,7 @@ runs:
         python3 "$GITHUB_ACTION_PATH/ml/commit_risk/commit_risk_predictor.py" \
           --scan-path "${{ inputs.scan-path }}" \
           --model-path "$GITHUB_ACTION_PATH/models/commit_risk/commit_risk_model.pkl" \
-          --vectorizer-path "$GITHUB_ACTION_PATH/data/features/commit_risk/tfidf_vectorizer.pkl" \
+          --vectorizer-path "$GITHUB_ACTION_PATH/models/commit_risk/tfidf_vectorizer.pkl" \
           --high-threshold "${{ inputs.ml1-high-threshold }}" \
           --medium-threshold "${{ inputs.ml1-medium-threshold }}" \
           --review-confidence-threshold "${{ inputs.ml1-review-confidence-threshold }}" \

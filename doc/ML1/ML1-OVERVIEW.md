@@ -160,7 +160,7 @@ Processing:
 
 Outputs:
 
-- `data/features/commit_risk/tfidf_vectorizer.pkl`
+- `models/commit_risk/tfidf_vectorizer.pkl`
 - `data/features/commit_risk/X_train.pkl`
 - `data/features/commit_risk/X_valid.pkl`
 - `data/features/commit_risk/X_test.pkl`
@@ -210,7 +210,7 @@ Outputs:
 The runtime predictor (`ml/commit_risk/commit_risk_predictor.py`) consumes:
 
 - `models/commit_risk/commit_risk_model.pkl`
-- `data/features/commit_risk/tfidf_vectorizer.pkl`
+- `models/commit_risk/tfidf_vectorizer.pkl`
 
 Without these offline artifacts, ML1 inference cannot run.
 
@@ -275,7 +275,7 @@ If no function can be extracted for a changed file:
 ML1 loads:
 
 - model from `models/commit_risk/commit_risk_model.pkl`
-- vectorizer from `data/features/commit_risk/tfidf_vectorizer.pkl`
+- vectorizer from `models/commit_risk/tfidf_vectorizer.pkl`
 
 Then transforms code with TF-IDF and predicts positive-class probabilities.
 

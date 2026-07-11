@@ -7,12 +7,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 DATA_DIR = Path("data/processed/commit_risk")
 FEATURE_DIR = Path("data/features/commit_risk")
+MODEL_DIR = Path("models/commit_risk")
 
 TRAIN_PATH = DATA_DIR / "train.csv"
 VALID_PATH = DATA_DIR / "valid.csv"
 TEST_PATH = DATA_DIR / "test.csv"
 
-VECTORIZER_PATH = FEATURE_DIR / "tfidf_vectorizer.pkl"
+VECTORIZER_PATH = MODEL_DIR / "tfidf_vectorizer.pkl"
 
 MAX_FEATURES = 5000
 
@@ -28,6 +29,7 @@ def load_dataset(file_path):
 
 def main():
     FEATURE_DIR.mkdir(parents=True, exist_ok=True)
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
     train_df = load_dataset(TRAIN_PATH)
     valid_df = load_dataset(VALID_PATH)
