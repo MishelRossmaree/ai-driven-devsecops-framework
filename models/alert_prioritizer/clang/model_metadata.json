@@ -1,0 +1,191 @@
+{
+  "dataset_row_counts": {
+    "total_rows": 11449,
+    "known_priority_rows_before_dedup": 11173,
+    "known_priority_rows_after_dedup": 11173
+  },
+  "excluded_unknown_count": 276,
+  "class_distributions": {
+    "overall_known": {
+      "0": 6665,
+      "1": 244,
+      "2": 4264
+    },
+    "train": {
+      "0": 4015,
+      "1": 150,
+      "2": 2564
+    },
+    "validation": {
+      "0": 1270,
+      "1": 47,
+      "2": 828
+    },
+    "test": {
+      "0": 1380,
+      "1": 47,
+      "2": 872
+    }
+  },
+  "deduplication_key": [
+    "juliet_case_id",
+    "source_file",
+    "line",
+    "alert_id",
+    "severity",
+    "message",
+    "label"
+  ],
+  "grouping_key": "juliet_case_id",
+  "split_seed": 42,
+  "split_counts": {
+    "train": {
+      "rows": 6729,
+      "groups": 2624,
+      "class_distribution": {
+        "0": 4015,
+        "1": 150,
+        "2": 2564
+      }
+    },
+    "validation": {
+      "rows": 2145,
+      "groups": 875,
+      "class_distribution": {
+        "0": 1270,
+        "1": 47,
+        "2": 828
+      }
+    },
+    "test": {
+      "rows": 2299,
+      "groups": 875,
+      "class_distribution": {
+        "0": 1380,
+        "1": 47,
+        "2": 872
+      }
+    }
+  },
+  "overlap_check_results": {
+    "attempt": 0,
+    "seed": 42,
+    "no_group_overlap": true,
+    "no_exact_overlap": true,
+    "train_val_group_overlap": 0,
+    "train_test_group_overlap": 0,
+    "val_test_group_overlap": 0,
+    "train_val_exact_overlap": 0,
+    "train_test_exact_overlap": 0,
+    "val_test_exact_overlap": 0
+  },
+  "feature_columns": [
+    "severity_score",
+    "has_cwe",
+    "is_null_pointer",
+    "is_buffer_issue",
+    "is_memory_issue",
+    "is_obsolete_function",
+    "is_clang",
+    "alert_id",
+    "severity",
+    "message"
+  ],
+  "excluded_leakage_fields": [
+    "annotation_id",
+    "source_file",
+    "line",
+    "juliet_case_id",
+    "juliet_cwe_family",
+    "ground_truth_status",
+    "is_bad_path",
+    "is_good_path",
+    "raw_report_path",
+    "manual_priority",
+    "annotation_reason",
+    "priority",
+    "label",
+    "cwe"
+  ],
+  "candidate_models": [
+    "Logistic Regression",
+    "SVM",
+    "Random Forest",
+    "ANN"
+  ],
+  "selection_metric": "macro_f1 > high_recall > weighted_f1 > accuracy",
+  "selected_model": "ANN",
+  "selected_model_parameters": {
+    "activation": "relu",
+    "alpha": 0.0001,
+    "batch_size": "auto",
+    "beta_1": 0.9,
+    "beta_2": 0.999,
+    "early_stopping": false,
+    "epsilon": 1e-08,
+    "hidden_layer_sizes": [
+      128,
+      64
+    ],
+    "learning_rate": "constant",
+    "learning_rate_init": 0.001,
+    "max_fun": 15000,
+    "max_iter": 500,
+    "momentum": 0.9,
+    "n_iter_no_change": 10,
+    "nesterovs_momentum": true,
+    "power_t": 0.5,
+    "random_state": 42,
+    "shuffle": true,
+    "solver": "adam",
+    "tol": 0.0001,
+    "validation_fraction": 0.1,
+    "verbose": false,
+    "warm_start": false
+  },
+  "validation_metrics": {
+    "accuracy": 0.8125874125874126,
+    "macro_f1": 0.713579631507971,
+    "weighted_f1": 0.8059252448458066,
+    "high_recall": 0.6292270531400966,
+    "confusion_matrix": "[[1196, 17, 57], [21, 26, 0], [301, 6, 521]]",
+    "class_0_precision": 0.7878787878787878,
+    "class_0_recall": 0.9417322834645669,
+    "class_0_f1": 0.8579626972740315,
+    "class_0_support": 1270,
+    "class_1_precision": 0.5306122448979592,
+    "class_1_recall": 0.5531914893617021,
+    "class_1_f1": 0.5416666666666666,
+    "class_1_support": 47,
+    "class_2_precision": 0.9013840830449827,
+    "class_2_recall": 0.6292270531400966,
+    "class_2_f1": 0.7411095305832148,
+    "class_2_support": 828
+  },
+  "final_test_metrics": {
+    "model": "ANN",
+    "accuracy": 0.802522836015659,
+    "macro_f1": 0.6970778493290114,
+    "weighted_f1": 0.7933647490688439,
+    "high_recall": 0.5860091743119266,
+    "confusion_matrix": "[[1308, 20, 52], [21, 26, 0], [355, 6, 511]]",
+    "class_0_precision": 0.7767220902612827,
+    "class_0_recall": 0.9478260869565217,
+    "class_0_f1": 0.8537859007832899,
+    "class_0_support": 1380,
+    "class_1_precision": 0.5,
+    "class_1_recall": 0.5531914893617021,
+    "class_1_f1": 0.5252525252525253,
+    "class_1_support": 47,
+    "class_2_precision": 0.9076376554174067,
+    "class_2_recall": 0.5860091743119266,
+    "class_2_f1": 0.7121951219512195,
+    "class_2_support": 872
+  },
+  "artifact_paths": {
+    "model": "models/alert_prioritizer/clang/clang_priority_model.pkl",
+    "metadata": "models/alert_prioritizer/clang/model_metadata.json",
+    "validation_model_comparison": "reports/alert_prioritizer/clang/validation_model_comparison.csv",
+    "test_evaluation": "reports/alert_prioritizer/clang/test_evaluation.csv"
+  }
+}

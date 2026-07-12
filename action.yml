@@ -68,6 +68,8 @@ runs:
     - name: Run Clang Static Analyzer
       shell: bash
       run: |
+        CLANG_STATUS_FILE="reports/clang-report/scan-status.txt"
+
         C_FILES=$(find "${{ inputs.scan-path }}" \
           -path "*/.devsecops" -prune -o \
           -path "*/reports" -prune -o \
@@ -88,11 +90,14 @@ runs:
 
         if [ -z "$C_FILES" ] && [ -z "$CPP_FILES" ]; then
           echo "No C/C++ files found for Clang analysis." | tee reports/clang-output.txt
+          echo "SCAN_COMPLETED_NO_SOURCE" > "$CLANG_STATUS_FILE"
         else
           : > reports/clang-output.txt
+          findings_detected=0
 
           if [ -n "$C_FILES" ]; then
             echo "Running Clang analyzer for C files..." | tee -a reports/clang-output.txt
+            set +e
             scan-build \
               --status-bugs \
               -o reports/clang-report \
@@ -100,11 +105,23 @@ runs:
               -std=gnu89 \
               -fsyntax-only \
               $C_FILES \
-              >> reports/clang-output.txt 2>&1 || true
+              >> reports/clang-output.txt 2>&1
+            c_exit=$?
+            set -e
+
+            if [ "$c_exit" -eq 1 ]; then
+              findings_detected=1
+              echo "Clang analyzer reported findings for C files." | tee -a reports/clang-output.txt
+            elif [ "$c_exit" -ne 0 ]; then
+              echo "SCAN_FAILED" > "$CLANG_STATUS_FILE"
+              echo "Clang analyzer execution failed for C files with exit code $c_exit." | tee -a reports/clang-output.txt
+              exit "$c_exit"
+            fi
           fi
 
           if [ -n "$CPP_FILES" ]; then
             echo "Running Clang analyzer for C++ files..." | tee -a reports/clang-output.txt
+            set +e
             scan-build \
               --status-bugs \
               -o reports/clang-report \
@@ -112,7 +129,24 @@ runs:
               -std=c++11 \
               -fsyntax-only \
               $CPP_FILES \
-              >> reports/clang-output.txt 2>&1 || true
+              >> reports/clang-output.txt 2>&1
+            cpp_exit=$?
+            set -e
+
+            if [ "$cpp_exit" -eq 1 ]; then
+              findings_detected=1
+              echo "Clang analyzer reported findings for C++ files." | tee -a reports/clang-output.txt
+            elif [ "$cpp_exit" -ne 0 ]; then
+              echo "SCAN_FAILED" > "$CLANG_STATUS_FILE"
+              echo "Clang analyzer execution failed for C++ files with exit code $cpp_exit." | tee -a reports/clang-output.txt
+              exit "$cpp_exit"
+            fi
+          fi
+
+          if [ "$findings_detected" -eq 1 ]; then
+            echo "SCAN_COMPLETED_WITH_FINDINGS" > "$CLANG_STATUS_FILE"
+          else
+            echo "SCAN_COMPLETED_NO_FINDINGS" > "$CLANG_STATUS_FILE"
           fi
         fi
 

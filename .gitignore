@@ -2,6 +2,7 @@
 # Training datasets
 # -------------------------
 data/raw/
+data/intermediate/
 data/processed/
 
 # -------------------------

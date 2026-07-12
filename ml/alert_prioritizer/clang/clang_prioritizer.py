@@ -1,11 +1,13 @@
 import csv
 import os
 import re
+import sys
 import html
 import pandas as pd
 import joblib
 
 CLANG_REPORT_DIR = "reports/clang-report"
+SCAN_STATUS_FILE = os.path.join(CLANG_REPORT_DIR, "scan-status.txt")
 
 OUTPUT_FILE = (
     "reports/alert_prioritizer/clang/prioritised-alerts.csv"
@@ -28,6 +30,24 @@ PRIORITY_MAP = {
     "HIGH": 2
 }
 
+REQUIRED_FEATURE_COLUMNS = [
+    "severity_score",
+    "has_cwe",
+    "is_null_pointer",
+    "is_buffer_issue",
+    "is_memory_issue",
+    "is_obsolete_function",
+    "is_clang",
+    "alert_id",
+    "severity",
+    "message",
+]
+
+
+def fail(message, exit_code=1):
+    print(f"FAILED: {message}", file=sys.stderr)
+    sys.exit(exit_code)
+
 
 def extract_html_reports():
     html_files = []
@@ -38,6 +58,27 @@ def extract_html_reports():
                 html_files.append(os.path.join(root, file))
 
     return html_files
+
+
+def extract_plist_reports():
+    plist_files = []
+
+    for root, _, files in os.walk(CLANG_REPORT_DIR):
+        for file in files:
+            if file.endswith(".plist"):
+                plist_files.append(os.path.join(root, file))
+
+    return plist_files
+
+
+def read_scan_status():
+    if not os.path.exists(SCAN_STATUS_FILE):
+        return ""
+    try:
+        with open(SCAN_STATUS_FILE, "r", encoding="utf-8") as handle:
+            return handle.read().strip()
+    except OSError:
+        return ""
 
 
 def clean_text(value):
@@ -92,17 +133,17 @@ def keyword_feature(text, keywords):
 
 
 def build_features(message, alert_id, severity, cwe):
-    return {
+    features = {
         "severity_score": severity_to_score(severity),
         "has_cwe": has_value(cwe),
         "is_null_pointer": keyword_feature(
-            message, ["null pointer", "nullpointer", "null"]
+            message, ["null pointer", "nullpointer"]
         ),
         "is_buffer_issue": keyword_feature(
             message, ["buffer", "overflow", "overrun", "out of bounds"]
         ),
         "is_memory_issue": keyword_feature(
-            message, ["memory", "memleak", "leak", "free", "dereference"]
+            message, ["memory", "leak", "free", "dereference", "use after free", "double free"]
         ),
         "is_obsolete_function": keyword_feature(
             message, ["gets", "strcpy", "strcat", "sprintf"]
@@ -110,9 +151,16 @@ def build_features(message, alert_id, severity, cwe):
         "is_clang": 1,
         "alert_id": str(alert_id),
         "severity": str(severity),
-        "cwe": str(cwe),
         "message": str(message),
     }
+
+    if list(features.keys()) != REQUIRED_FEATURE_COLUMNS:
+        raise RuntimeError(
+            "Runtime feature schema mismatch. "
+            f"Expected {REQUIRED_FEATURE_COLUMNS}, got {list(features.keys())}."
+        )
+
+    return features
 
 
 def load_model():
@@ -121,15 +169,73 @@ def load_model():
             f"Trained model not found at {MODEL_PATH}. "
             "Run train_clang_model.py first."
         )
-    return joblib.load(MODEL_PATH)
+    try:
+        model = joblib.load(MODEL_PATH)
+    except Exception as exc:
+        raise RuntimeError(f"Unable to load model at {MODEL_PATH}: {exc}") from exc
+
+    if not hasattr(model, "predict"):
+        raise RuntimeError("Loaded model object does not support predict().")
+
+    return model
+
+
+def validate_model_feature_compatibility(model):
+    try:
+        preprocessor = model.named_steps["preprocessor"]
+        transformers = preprocessor.transformers
+    except Exception as exc:
+        raise RuntimeError(f"Unable to inspect model feature schema: {exc}") from exc
+
+    model_columns = []
+    for _, _, columns in transformers:
+        if isinstance(columns, str):
+            model_columns.append(columns)
+        else:
+            model_columns.extend(columns)
+
+    if model_columns != REQUIRED_FEATURE_COLUMNS:
+        raise RuntimeError(
+            "Model expects a different feature schema. "
+            f"Expected {REQUIRED_FEATURE_COLUMNS}, model has {model_columns}."
+        )
+
+
+def validate_runtime_environment():
+    if not os.path.isdir(CLANG_REPORT_DIR):
+        raise FileNotFoundError(f"Clang report directory is missing: {CLANG_REPORT_DIR}")
+
+    html_reports = extract_html_reports()
+    plist_reports = extract_plist_reports()
+    scan_status = read_scan_status()
+
+    if scan_status == "SCAN_FAILED":
+        raise RuntimeError("Clang scan status indicates analyzer execution/configuration failure.")
+
+    if not html_reports and not plist_reports:
+        if scan_status == "SCAN_COMPLETED_NO_SOURCE":
+            return html_reports, scan_status
+        raise RuntimeError(
+            "No valid Clang analyzer outputs found. "
+            "Expected report-*.html or *.plist files in reports/clang-report/."
+        )
+
+    return html_reports, scan_status
 
 
 def parse_clang_reports(model):
     alerts = []
 
-    html_reports = extract_html_reports()
+    html_reports, scan_status = validate_runtime_environment()
 
     print(f"Found {len(html_reports)} Clang reports.")
+
+    if not html_reports:
+        # Valid analyzer structure exists (for example plist-only or no source files), but no
+        # parser-usable HTML alerts were produced.
+        return pd.DataFrame(alerts), scan_status
+
+    parse_errors = []
 
     for report_file in html_reports:
         try:
@@ -177,7 +283,21 @@ def parse_clang_reports(model):
             )
 
             df_features = pd.DataFrame([features])
+
+            missing_columns = [
+                column for column in REQUIRED_FEATURE_COLUMNS if column not in df_features.columns
+            ]
+            if missing_columns:
+                raise RuntimeError(
+                    f"Required runtime feature columns missing: {missing_columns}"
+                )
+
+            df_features = df_features[REQUIRED_FEATURE_COLUMNS]
             label = model.predict(df_features)[0]
+
+            if label not in LABEL_MAP:
+                raise RuntimeError(f"Unexpected prediction label returned by model: {label}")
+
             priority = LABEL_MAP[label]
 
             alerts.append({
@@ -193,9 +313,18 @@ def parse_clang_reports(model):
             })
 
         except Exception as e:
-            print(f"Error parsing {report_file}: {e}")
+            parse_errors.append((report_file, str(e)))
 
-    return pd.DataFrame(alerts)
+    if parse_errors and not alerts:
+        first_file, first_error = parse_errors[0]
+        raise RuntimeError(
+            f"Malformed or unreadable Clang report. Example failure in {first_file}: {first_error}"
+        )
+
+    for report_file, error in parse_errors:
+        print(f"Warning: could not parse {report_file}: {error}", file=sys.stderr)
+
+    return pd.DataFrame(alerts), scan_status
 
 
 def write_prioritised_alerts(df):
@@ -253,31 +382,39 @@ def write_prioritised_alerts(df):
 
 
 def main():
-    model = load_model()
+    try:
+        model = load_model()
+        validate_model_feature_compatibility(model)
 
-    df = parse_clang_reports(model)
+        df, scan_status = parse_clang_reports(model)
+        write_prioritised_alerts(df)
 
-    write_prioritised_alerts(df)
+        print("===== Clang Prioritised Alerts =====")
 
-    print("===== Clang Prioritised Alerts =====")
+        if df.empty:
+            print("COMPLETED WITH ZERO ALERTS")
+            if scan_status == "SCAN_COMPLETED_NO_SOURCE":
+                print("Clang scan completed with no C/C++ source files to analyze.")
+            else:
+                print("Valid Clang report structure found, but no usable alerts were parsed.")
+            return
 
-    if df.empty:
-        print("No Clang alerts detected.")
-        return
+        print("COMPLETED WITH ALERTS")
+        for _, alert in df.iterrows():
+            location = (
+                f"{alert['file']}:{alert['line']}"
+                if alert["line"]
+                else alert["file"]
+            )
 
-    for _, alert in df.iterrows():
-        location = (
-            f"{alert['file']}:{alert['line']}"
-            if alert["line"]
-            else alert["file"]
-        )
-
-        print(
-            f"{alert['priority']} | "
-            f"{alert['tool']} | "
-            f"{location} | "
-            f"{alert['message']}"
-        )
+            print(
+                f"{alert['priority']} | "
+                f"{alert['tool']} | "
+                f"{location} | "
+                f"{alert['message']}"
+            )
+    except Exception as exc:
+        fail(str(exc))
 
 
 if __name__ == "__main__":
