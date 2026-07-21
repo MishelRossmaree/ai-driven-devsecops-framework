@@ -28,7 +28,11 @@ def load_report(path, report_name):
         print(f"{report_name} report not found: {path}")
         return pd.DataFrame()
 
-    df = pd.read_csv(path)
+    try:
+        df = pd.read_csv(path)
+    except Exception as exc:
+        print(f"{report_name} report is malformed and could not be parsed: {exc}")
+        return pd.DataFrame()
 
     if df.empty:
         print(f"{report_name} report is empty.")
@@ -92,9 +96,12 @@ def get_anomaly_summary(anomaly_df):
     return {
         "anomaly_status": row.get("anomaly_status", "NOT_AVAILABLE"),
         "anomaly_score": row.get("anomaly_score", ""),
-        "anomaly_reason": (
-            f"ML3 pipeline anomaly status: {row.get('anomaly_status', 'NOT_AVAILABLE')}, "
-            f"score: {row.get('anomaly_score', '')}"
+        "anomaly_reason": str(
+            row.get(
+                "reason",
+                f"ML3 pipeline anomaly status: {row.get('anomaly_status', 'NOT_AVAILABLE')}, "
+                f"score: {row.get('anomaly_score', '')}"
+            )
         )
     }
 
@@ -127,6 +134,20 @@ def calculate_decision(commit_df, cppcheck_df, clang_df, anomaly_df):
 
     anomaly_summary = get_anomaly_summary(anomaly_df)
     anomaly_status = anomaly_summary["anomaly_status"]
+    anomaly_reason = str(anomaly_summary.get("anomaly_reason", ""))
+
+    malformed_or_schema_not_available = (
+        anomaly_status == "NOT_AVAILABLE" and
+        (
+            "MISSING" in anomaly_reason or
+            "MALFORMED" in anomaly_reason or
+            "SCHEMA_MISMATCH" in anomaly_reason or
+            "schema-incompatible" in anomaly_reason or
+            "CURRENT_METRICS_SCHEMA_INCOMPATIBLE" in anomaly_reason
+        )
+    )
+
+    ml3_failed = anomaly_status == "FAILED"
 
     if commit_high_count > 0 or alert_high_count > 0:
         decision = "BLOCK"
@@ -139,6 +160,14 @@ def calculate_decision(commit_df, cppcheck_df, clang_df, anomaly_df):
     elif anomaly_status == "ANOMALOUS":
         decision = "REVIEW"
         reason = "Anomalous CI/CD pipeline behaviour detected by ML3"
+
+    elif malformed_or_schema_not_available:
+        decision = "REVIEW"
+        reason = "ML3 anomaly detection unavailable due to malformed or schema-incompatible upstream input"
+
+    elif ml3_failed:
+        decision = "REVIEW"
+        reason = "ML3 anomaly detection runtime failed"
 
     elif commit_medium_count > 0 or alert_medium_count > 0:
         decision = "REVIEW"

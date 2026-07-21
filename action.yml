@@ -22,6 +22,10 @@ inputs:
     description: "Minimum historical ML3 rows required before anomaly model training"
     required: false
     default: "30"
+  ml3-persist-state:
+    description: "Whether to commit and push ML3 state back to the consuming repository"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -211,7 +215,7 @@ runs:
         python3 "$GITHUB_ACTION_PATH/ml/anomaly_detection/anomaly_detector.py"
 
     - name: Persist ML3 state in target repository
-      if: github.event_name == 'push' && github.ref_name != 'main'
+      if: github.event_name == 'push' && github.ref_name != 'main' && inputs.ml3-persist-state == 'true'
       shell: bash
       run: |
         if [ -d ".devsecops/anomaly_detection" ]; then
@@ -297,7 +301,7 @@ runs:
       if: always()
       with:
         name: anomaly-detection-metrics
-        path: reports/anomaly_detection/pipeline_metrics.csv
+        path: reports/anomaly_detection/current_pipeline_metrics.csv
         if-no-files-found: ignore
 
     - name: Upload ML3 anomaly report
@@ -314,6 +318,22 @@ runs:
       with:
         name: ml3-model-comparison
         path: reports/anomaly_detection/anomaly_model_comparison.csv
+        if-no-files-found: ignore
+
+    - name: Upload ML3 synthetic evaluation CSV
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: ml3-synthetic-evaluation-csv
+        path: reports/anomaly_detection/synthetic_evaluation.csv
+        if-no-files-found: ignore
+
+    - name: Upload ML3 synthetic evaluation summary
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: ml3-synthetic-evaluation-summary
+        path: reports/anomaly_detection/synthetic_evaluation_summary.json
         if-no-files-found: ignore
 
     - name: Upload final security decision

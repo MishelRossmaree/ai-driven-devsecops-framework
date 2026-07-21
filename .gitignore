@@ -37,6 +37,11 @@ reports/**
 !reports/alert_prioritizer/clang/validation_model_comparison.csv
 !reports/alert_prioritizer/clang/test_evaluation.csv
 
+# Keep ML3 evaluation artifacts
+# Keep the ML3 report directory only
+!reports/anomaly_detection/
+!reports/anomaly_detection/.gitkeep
+
 # -------------------------
 # Python cache
 # -------------------------
