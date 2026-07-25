@@ -340,27 +340,37 @@ and the Decision Engine.
 
 ## Automated Testing
 
-The framework includes an automated test suite for the Security Decision Engine. Phase 1 testing validates deterministic decision logic, report processing, error handling, and integration behaviour.
+The framework includes a comprehensive automated test suite covering the Security Decision Engine and ML1 Commit Risk Predictor runtime components.
 
-### Running tests
+### Quick Start
+
+Run all current unit tests:
 
 ```bash
-python3 -m pytest tests/unit/test_security_decision_engine.py -v
+python3 -m pytest tests/unit -v
 ```
 
-### Coverage reports
-
-Terminal coverage with missing lines:
+Run combined coverage:
 
 ```bash
-python3 -m pytest tests/unit/test_security_decision_engine.py \
+python3 -m pytest tests/unit \
   --cov=ml.decision_engine \
+  --cov=ml.commit_risk \
   --cov-report=term-missing
 ```
 
-**Phase 1 results**: 70 tests, 99% Decision Engine coverage.
+### Test Results
 
-For detailed test design, scenarios, known limitations, and coverage interpretation, see [doc/TESTING.md](doc/TESTING.md).
+- **Phase 1 (Decision Engine)**: 70 tests, 99% coverage
+- **Phase 2 (ML1 Commit Risk Predictor)**: 92 tests, 66% coverage
+- **Combined**: 162 tests, 100% pass rate
+
+### Documentation
+
+- **Test design and scenarios**: [doc/testing/TESTING.md](doc/testing/TESTING.md)
+- **Setup and execution guide**: [doc/testing/SETUP_AND_RUN_TESTS.md](doc/testing/SETUP_AND_RUN_TESTS.md)
+
+The test suite validates deterministic logic, error handling, and component integration using mocked dependencies. Model prediction quality is measured separately using validation datasets documented in evaluation reports under `reports/`.
 
 ## Limitations
 
