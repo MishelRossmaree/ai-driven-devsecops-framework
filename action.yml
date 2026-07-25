@@ -41,7 +41,7 @@ runs:
       shell: bash
       run: |
         python3 -m pip install --upgrade pip
-        python3 -m pip install pandas scikit-learn joblib
+        python3 -m pip install -r "$GITHUB_ACTION_PATH/requirements.txt"
 
     - name: Create report folders
       shell: bash
