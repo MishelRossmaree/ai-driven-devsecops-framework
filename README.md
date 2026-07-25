@@ -338,6 +338,30 @@ using Git LFS. Retraining is not required to execute the framework.
 Refer to the documentation under the `doc/` directory for ML1, ML2, ML3
 and the Decision Engine.
 
+## Automated Testing
+
+The framework includes an automated test suite for the Security Decision Engine. Phase 1 testing validates deterministic decision logic, report processing, error handling, and integration behaviour.
+
+### Running tests
+
+```bash
+python3 -m pytest tests/unit/test_security_decision_engine.py -v
+```
+
+### Coverage reports
+
+Terminal coverage with missing lines:
+
+```bash
+python3 -m pytest tests/unit/test_security_decision_engine.py \
+  --cov=ml.decision_engine \
+  --cov-report=term-missing
+```
+
+**Phase 1 results**: 70 tests, 99% Decision Engine coverage.
+
+For detailed test design, scenarios, known limitations, and coverage interpretation, see [doc/TESTING.md](doc/TESTING.md).
+
 ## Limitations
 
 Only implementation-real limitations are listed.

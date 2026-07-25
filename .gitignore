@@ -51,6 +51,14 @@ __pycache__/
 .mypy_cache/
 
 # -------------------------
+# Test and coverage artifacts
+# -------------------------
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# -------------------------
 # Virtual environments
 # -------------------------
 .venv/
@@ -76,3 +84,6 @@ Thumbs.db
 *.tmp
 *.bak
 *.swp
+
+.coverage
+.pytest_cache/
